@@ -2,7 +2,7 @@ import sys
 import json
 from enum import Enum
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtWidgets import QWidget, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QStackedWidget, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QStackedWidget, QSizePolicy, QFrame
 from message_parser import MessageParser
 from typing import OrderedDict
 
@@ -10,123 +10,115 @@ class AppConfig():
 	expand_on_launch = True
 
 class UiTree(Enum):
-	CENTRAL_WIDGET = True
-	MAIN_VSTACK = True
-	COMPACT_VSTACK = True
-	VIEWER_VSTACK = True
-	TITLE_HSTACK = True
+	CENTRAL_VBOX = True
+	COMPACT_VBOX = True
+	VIEWER_VBOX = True
+	TITLE_HBOX = True
 
 class AppWindow(QtWidgets.QMainWindow):
 	def __init__(self) -> None:
 		super().__init__()
 		self.setup_ui()
-		self.setup_inapp_logic()
+		self.init()
 		self.show()
 
 	def setup_ui(self):
 		self.setObjectName("MainWindow")
-		# self.resize(500, 800)
-		self.setWindowTitle("Fix Message Decoder")
+		self.setWindowTitle("Fix Message Viewer")
+		self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
+		self.resize(400, 600)
 		self.setup_actions()
 		self.setup_menu()
-		self.setWindowFlags(QtCore.Qt.WindowType.WindowStaysOnTopHint)
-		# self.setWindowFlags(QtCore.Qt.WindowType.WindowStaysOnTopHint | QtCore.Qt.WindowType.FramelessWindowHint)
+
 		central_widget = QWidget(self)
-		central_widget.setObjectName("centralwidget")
 		self.setCentralWidget(central_widget)
 
-		if UiTree.CENTRAL_WIDGET:
-			main_vlayout = QVBoxLayout()
-			central_widget.setLayout(main_vlayout)
+		central_vbox = QVBoxLayout()
+		central_vbox.setContentsMargins(10,10,10,10)
 
-			if UiTree.MAIN_VSTACK:
+		compact_container = QWidget()
+		compact_vbox = QVBoxLayout()
+		compact_vbox.setContentsMargins(0,0,0,0)
+		compact_label = QLabel('FIXV')
 
-				main_stack = QStackedWidget()
-				self.main_stack = main_stack
-				main_vlayout.addWidget(main_stack)
-				compact_page = QWidget()
-				self.compact_page = compact_page
-				main_stack.addWidget(compact_page)
-				compact_vlayout = QVBoxLayout()
-				# compact_vlayout.setContentsMargins(0,0,0,0)
-				# compact_vlayout.setSpacing(0)
-				compact_page.setLayout(compact_vlayout)
+		viewer_container = QWidget()
+		viewer_vbox = QVBoxLayout()
+		viewer_vbox.setContentsMargins(10,10,10,10)
 
-				if UiTree.COMPACT_VSTACK:
-					toggle_viewer_button = QPushButton('Toggle')
-					self.toggle_viewer_button = toggle_viewer_button
-					compact_vlayout.addWidget(toggle_viewer_button)
-					compact_vlayout.addStretch()
+		title_hbox = QHBoxLayout()
+		msg_title_label = QLabel('Fix Message')
+		parse_button = QPushButton('Parse')
+		clear_button = QPushButton('Clear')
 
-				viewer_page = QWidget()
-				self.viewer_page = viewer_page
-				main_stack.addWidget(viewer_page)
-				viewer_vlayout = QVBoxLayout()
-				viewer_page.setLayout(viewer_vlayout)
+		msg_label = QLabel('Testing Fix Message to be parsed')
+		msg_label.setContentsMargins(5, 5, 5, 5)
+		msg_label.setStyleSheet('QLabel { color: black; background-color : #999999; }')
+		separator_hline = QFrame()
+		separator_hline.setFrameShape(QFrame.Shape.HLine)
+		output_tree = QTreeWidget()
+		output_tree.setColumnCount(3)
+		output_tree.setHeaderLabels(['Tag', 'Name', 'Value'])
 
-				if UiTree.VIEWER_VSTACK:
 
-					toggle_compact_button = QPushButton('Toggle')
-					self.toggle_compact_button = toggle_compact_button
-					viewer_vlayout.addWidget(toggle_compact_button)
+		central_widget.setLayout(central_vbox)
+		if UiTree.CENTRAL_VBOX:
+			central_vbox.addWidget(compact_container)
+			compact_container.setLayout(compact_vbox)
 
-					title_hlayout = QHBoxLayout()
-					viewer_vlayout.addLayout(title_hlayout)
-					if UiTree.TITLE_HSTACK:
-						input_msg_label = QLabel()
-						input_msg_label.setText("Fix Message")
-						title_hlayout.addWidget(input_msg_label)
+			if UiTree.COMPACT_VBOX:
+				compact_vbox.addWidget(compact_label)
 
-						title_hlayout.addStretch()
+			central_vbox.addWidget(viewer_container)
+			viewer_container.setLayout(viewer_vbox)
 
-						clear_button = QPushButton()
-						clear_button.setText("Clear")
-						self.clear_button = clear_button
-						title_hlayout.addWidget(clear_button)
+			if UiTree.VIEWER_VBOX:
+				viewer_vbox.addLayout(title_hbox)
 
-					msg_edit = QPlainTextEdit()
-					msg_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-					msg_edit.setMaximumHeight(msg_edit.fontMetrics().lineSpacing() * 3)
-					self.msg_edit = msg_edit
-					viewer_vlayout.addWidget(msg_edit)
+				if UiTree.TITLE_HBOX:
+					title_hbox.addWidget(msg_title_label)
+					title_hbox.addStretch()
+					title_hbox.addWidget(parse_button)
+					title_hbox.addWidget(clear_button)
 
-					parse_button = QPushButton()
-					parse_button.setText("Parse")
-					self.parse_button = parse_button
-					viewer_vlayout.addWidget(parse_button)
+				viewer_vbox.addWidget(msg_label)
+				viewer_vbox.addWidget(separator_hline)
+				viewer_vbox.addWidget(output_tree)
 
-					output_tree = QTreeWidget()
-					output_tree.setColumnCount(3)
-					output_tree.setHeaderLabels(['Tag', 'Name', 'Value'])
-					self.output_tree = output_tree
-					viewer_vlayout.addWidget(output_tree)
+
+		## Export variable to self
+		self.central_widget = central_widget
+		self.compact_container = compact_container
+		self.viewer_container = viewer_container
+		self.clear_button = clear_button
+		self.msg_label = msg_label
+		self.output_tree = output_tree
+
+	def setup_actions(self):
+		self.toggle_mode_act = QtGui.QAction('&Toggle Mode')
+		self.toggle_mode_act.setShortcut("Ctrl+E")
+		self.toggle_mode_act.triggered.connect(self.toggle_compact)
 
 	def setup_menu(self):
 		view_menu = self.menuBar().addMenu("View")
 		view_menu.addAction(self.toggle_mode_act)
 
-	def setup_inapp_logic(self):
-		# self.main_stack.setCurrentIndex(1)
-		self.toggle_viewer_button.clicked.connect(self.toggle_compact_mode)
-		self.toggle_compact_button.clicked.connect(self.toggle_compact_mode)
-		self.clear_button.clicked.connect(self.msg_edit.clear)
+	def init(self):
+		self.clear_button.clicked.connect(self.msg_label.clear)
+		self.compact_container.setVisible(False)
+		self.is_compact = False
+		self.prev_size = self.size()
 
-	def setup_actions(self):
-		self.toggle_mode_act = QtGui.QAction('&Toggle Mode')
-		self.toggle_mode_act.setShortcut("Ctrl+E")
-		self.toggle_mode_act.triggered.connect(self.toggle_compact_mode)
-
-	def toggle_compact_mode(self):
-		is_compact = self.main_stack.currentIndex() == 0
-		hide_policy = QSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-		show_policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-		self.compact_page.setSizePolicy(hide_policy if is_compact else show_policy)
-		self.viewer_page.setSizePolicy(show_policy if is_compact else hide_policy)
-		self.main_stack.setCurrentIndex(1 if is_compact else 0)
-		self.main_stack.adjustSize()
+	def toggle_compact(self):
+		self.viewer_container.setVisible(self.is_compact)
+		self.compact_container.setVisible(not self.is_compact)
+		if not self.is_compact:
+			self.prev_size = self.size()
+		self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, not self.is_compact)
+		self.central_widget.adjustSize()
 		self.adjustSize()
-		# print(self.compact_page.sizePolicy().horizontalPolicy(), self.compact_page.sizePolicy().verticalPolicy())
-		# print(self.viewer_page.sizePolicy().horizontalPolicy(),self.viewer_page.sizePolicy().verticalPolicy())
+		self.resize(self.prev_size if self.is_compact else QtCore.QSize(0, 0))
+		self.is_compact = not self.is_compact
+		self.show()
 
 	def setup_output_tree(self, msg_dict: OrderedDict) -> QTreeWidget:
 		self.output_tree.clear()
