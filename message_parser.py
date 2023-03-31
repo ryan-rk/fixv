@@ -83,6 +83,6 @@ class MessageParser():
 		return value_dict
 
 	def parse_msg(self, msg: str) -> OrderedDict:
-		fix_msg = qf.Message(MessageParser.inv_format_message(msg), self.data_dictionary, True)
+		fix_msg = qf.Message(MessageParser.inv_format_message(msg), self.data_dictionary, False)
 		msg_dict = self.msg_to_dict(fix_msg)
 		return msg_dict
