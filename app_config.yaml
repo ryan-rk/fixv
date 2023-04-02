@@ -1,0 +1,6 @@
+# Dictionary for fix version 5.0
+TransportDataDictionary: 'dictionaries/FIXT11.xml'
+AppDataDictionary: 'dictionaries/FIX50SP2.xml'
+
+# Dictionary for fix version smaller than 5.0
+# DataDictionary: 'dictionaries/FIX44.xml'

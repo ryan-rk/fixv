@@ -1,9 +1,17 @@
 import sys
+import yaml
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox
 from PyQt6.QtGui import QGuiApplication, QClipboard
 from message_parser import MessageParser
-from typing import OrderedDict
+from typing import OrderedDict, Tuple
+
+def get_fix_dict_path(app_config: dict) -> Tuple[dict, dict]:
+	if 'TransportDataDictionary' in app_config and 'AppDataDictionary' in app_config:
+		return (app_config['TransportDataDictionary'], app_config['AppDataDictionary'])
+	if 'DataDictionary' in app_config:
+		return (app_config['DataDictionary'], None)
+	return (None, None)
 
 def get_clipboard(clipboard: QClipboard) -> str:
 	mime_data = clipboard.mimeData()
@@ -15,13 +23,33 @@ def set_clipboard(clipboard: QClipboard, source: str):
 	clipboard.setText(source)
 
 
+class ScrollLabel(QScrollArea):
+	def __init__(self, parent = None) -> None:
+		super().__init__(parent)
+		self.setWidgetResizable(True)
+		content = QWidget(self)
+		self.setWidget(content)
+		content_vbox = QVBoxLayout(content)
+		label = QLabel(content)
+		content_vbox.addWidget(label)
+		self.label = label
+
+	def setText(self, text):
+		self.label.setText(text)
+	
+	def text(self):
+		return self.label.text()
+
+	def clear(self):
+		self.label.clear()
+
 class AppConfig():
 	expand_on_launch = True
 
 class MessageEditor(QDialog):
-	def __init__(self, msg_label: QLabel, parent = None) -> None:
+	def __init__(self, msg_line: QTextEdit, parent = None) -> None:
 		super().__init__(parent)
-		self.msg_label = msg_label
+		self.msg_line = msg_line
 		self.init_ui()
 
 	def init_ui(self):
@@ -62,17 +90,48 @@ class MessageEditor(QDialog):
 		apply_button.clicked.connect(self.apply_changes)
 	
 	def apply_changes(self):
-		self.msg_label.setText(self.msg_text_edit.toPlainText())
+		self.msg_line.setText(self.msg_text_edit.toPlainText())
 		self.close()
 
 	def set_message(self):
-		self.msg_text_edit.setText(self.msg_label.text())
+		self.msg_text_edit.setText(self.msg_line.toPlainText())
 
 class AppWindow(QMainWindow):
-	def __init__(self, app: QtWidgets.QApplication, msg_parser: MessageParser) -> None:
+	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
+
+		# Setting up app config and initialize message parser
+		app_config_file_name = 'app_config.yaml'
+		app_config = None
+		try:
+			with open(app_config_file_name, 'r') as f:
+				app_config = yaml.safe_load(f)
+		except FileNotFoundError as e:
+			QMessageBox.warning(self, "Error",
+		       f"""<p>Config file not found. Please ensure that "{app_config_file_name}" file exists.</p>
+			   <p>Application will now exit.</p>""",
+			   QMessageBox.StandardButton.Ok)
+			sys.exit()
+		except Exception as e:
+			QMessageBox.warning(self, "Error",
+		       f"""<p>Error reading in config file. Please ensure that config file is in correct format.</p>
+			   <p>Application will now exit.</p>""",
+			   QMessageBox.StandardButton.Ok)
+			sys.exit()
+		
+		self.msg_parser = None
+		if app_config:
+			data_dict_path, appl_dict_path = get_fix_dict_path(app_config)
+			if data_dict_path or appl_dict_path:
+				self.msg_parser = MessageParser(data_dict_path, appl_dict_path)
+
+		if not self.msg_parser:
+			QMessageBox.warning(self, "Error",
+		       f"""<p>Quickfix dictionary path incorrectly set. Please check the config file.</p>
+			   <p>Application will now exit.</p>""",
+			   QMessageBox.StandardButton.Ok)
+			sys.exit()
 		self.app = app
-		self.msg_parser = msg_parser
 		self.init_ui()
 		self.init_logic()
 		self.show()
@@ -81,7 +140,7 @@ class AppWindow(QMainWindow):
 		self.setObjectName('MainWindow')
 		self.setWindowTitle('Fix Message Viewer')
 		self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
-		self.resize(400, 600)
+		self.resize(500, 600)
 		self.setup_actions()
 		self.setup_menu()
 
@@ -105,9 +164,9 @@ class AppWindow(QMainWindow):
 		toolbar_hbox = QHBoxLayout()
 		toolbar_hbox.setContentsMargins(0, 0, 0, 0)
 		toolbar_hbox.setSpacing(20)
+		compact_button = QPushButton('Compact')
 		autopaste_checkbox = QCheckBox('AutoPaste')
 		autocompact_checkbox = QCheckBox('AutoCompact')
-		compact_button = QPushButton('Compact')
 
 		msg_entry_vbox = QVBoxLayout()
 		msg_entry_vbox.setSpacing(0)
@@ -121,12 +180,18 @@ class AppWindow(QMainWindow):
 		paste_button = QPushButton('Paste')
 		clear_button = QPushButton('Clear')
 		parse_button = QPushButton('Parse')
-		msg_scrollarea = QScrollArea()
-		msg_scrollarea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-		msg_label = QLabel()
-		msg_scrollarea.setFixedHeight(msg_label.sizeHint().height() + msg_scrollarea.horizontalScrollBar().height())
-		msg_label.setContentsMargins(8, 8, 8, 8)
-		msg_label.setStyleSheet('QLabel { background-color : #222222; }')
+		# msg_scrollarea = QScrollArea()
+		# msg_scrollarea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+		# msg_label = QLabel()
+		# msg_scrollarea.setFixedHeight(msg_label.sizeHint().height() + msg_scrollarea.horizontalScrollBar().height())
+		# msg_label = ScrollLabel()
+		# msg_label.setContentsMargins(8, 8, 8, 8)
+		# msg_label.setStyleSheet('QLabel { background-color : #222222; }')
+		msg_line = QTextEdit()
+		msg_line.setReadOnly(True)
+		text_height = msg_line.document().documentLayout().documentSize().height()
+		msg_line.setFixedHeight(int(text_height) + 15)
+		msg_line.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
 
 		output_tree = QTreeWidget()
 		output_tree.setColumnCount(3)
@@ -172,8 +237,9 @@ class AppWindow(QMainWindow):
 						title_hbox.addWidget(clear_button)
 						title_hbox.addWidget(parse_button)
 
-					msg_entry_vbox.addWidget(msg_scrollarea)
-					msg_scrollarea.setWidget(msg_label)
+					# msg_entry_vbox.addWidget(msg_scrollarea)
+					# msg_scrollarea.setWidget(msg_label)
+					msg_entry_vbox.addWidget(msg_line)
 
 				viewer_vbox.addWidget(output_tree)
 
@@ -191,9 +257,9 @@ class AppWindow(QMainWindow):
 		self.paste_button = paste_button
 		self.clear_button = clear_button
 		self.parse_button = parse_button
-		self.msg_label = msg_label
+		self.msg_line = msg_line
 		self.output_tree = output_tree
-		self.message_editor = MessageEditor(msg_label)
+		self.message_editor = MessageEditor(msg_line)
 		self.clipboard = QGuiApplication.clipboard()
 
 	def setup_actions(self):
@@ -203,23 +269,28 @@ class AppWindow(QMainWindow):
 		self.edit_message_act = QtGui.QAction('&Edit Message')
 		self.edit_message_act.setShortcut("Ctrl+E")
 		self.edit_message_act.triggered.connect(self.show_message_editor)
+		self.always_top_act = QtGui.QAction('&Always On Top')
+		self.always_top_act.setCheckable(True)
+		self.always_top_act.setShortcut("Ctrl+I")
+		self.always_top_act.toggled.connect(lambda checked: print(checked))
 
 	def setup_menu(self):
 		edit_menu = self.menuBar().addMenu("Edit")
 		edit_menu.addAction(self.edit_message_act)
 		view_menu = self.menuBar().addMenu("View")
 		view_menu.addAction(self.toggle_mode_act)
+		view_menu.addAction(self.always_top_act)
 
 	def init_logic(self):
 		self.compact_label.mousePressEvent = lambda _: self.toggle_compact(False)
 		self.compact_button.clicked.connect(lambda: self.toggle_compact(True))
 		self.autopaste_checkbox.toggled.connect(self.toggle_autocopy)
 		self.autocompact_checkbox.toggled.connect(self.toggle_autocompact)
-		self.copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, self.msg_label.text()))
-		self.paste_button.clicked.connect(lambda: self.msg_label.setText(get_clipboard(self.clipboard)))
-		self.clear_button.clicked.connect(self.msg_label.clear)
+		self.copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, self.msg_line.toPlainText()))
+		self.paste_button.clicked.connect(self.paste_and_decode)
+		self.clear_button.clicked.connect(self.msg_line.clear)
 		self.parse_button.clicked.connect(self.decode_and_show_msg)
-		self.msg_label.mousePressEvent = self.show_message_editor
+		self.msg_line.mousePressEvent = self.show_message_editor
 		self.compact_container.setVisible(False)
 		self.is_compact = False
 		self.prev_size = self.size()
@@ -241,8 +312,7 @@ class AppWindow(QMainWindow):
 	def autopaste_decode(self):
 		if self.message_editor.isVisible():
 			return
-		self.paste_clipboard_msg()
-		self.decode_and_show_msg()
+		self.paste_and_decode()
 
 	def toggle_autocopy(self, checked: bool):
 		if checked:
@@ -266,12 +336,13 @@ class AppWindow(QMainWindow):
 		self.message_editor.set_message()
 		self.message_editor.show()
 	
-	def paste_clipboard_msg(self):
-		self.msg_label.setText(get_clipboard(self.clipboard))
+	def paste_and_decode(self):
+		self.msg_line.setText(get_clipboard(self.clipboard))
+		self.decode_and_show_msg()
 	
 	def decode_and_show_msg(self):
 		try:
-			msg_dict = self.msg_parser.parse_msg(self.msg_label.text())
+			msg_dict = self.msg_parser.parse_msg(self.msg_line.toPlainText())
 			self.setup_output_tree(msg_dict)
 		except Exception as error:
 			QMessageBox.warning(self, "Error",
@@ -303,14 +374,12 @@ class AppWindow(QMainWindow):
 
 if __name__ == "__main__":
 
-	fix_dict_path = 'dictionaries/FIX50SP2.xml'
-	msg_parser = MessageParser(fix_dict_path)
-
 	app = QtWidgets.QApplication(sys.argv)
-	app_window = AppWindow(app, msg_parser)
+	app.setApplicationName('FIX Viewer')
+	app_window = AppWindow(app)
 
-	msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
-	app_window.msg_label.setText(msg_string)
-	app_window.msg_label.setMinimumSize(app_window.msg_label.minimumSizeHint())
+	# msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
+	# app_window.msg_label.setText(msg_string)
+	# app_window.msg_label.setMinimumSize(app_window.msg_label.minimumSizeHint())
 
 	sys.exit(app.exec())

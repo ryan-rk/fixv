@@ -2,14 +2,17 @@ import quickfix as qf
 import re
 import xml.etree.ElementTree as ET
 from collections import OrderedDict, defaultdict
-import json
 from typing import Iterable, DefaultDict
 
 class MessageParser():
-	def __init__(self, fix_dict_path: str) -> None:
+	def __init__(self, data_dict_path: str = None, appl_dict_path: str = None) -> None:
 		self.no_group_type = 'NUMINGROUP'
-		self.data_dictionary = qf.DataDictionary(fix_dict_path)
-		self.build_field_type_map(fix_dict_path)
+		self.data_dictionary = qf.DataDictionary(data_dict_path)
+		self.appl_dictionary = qf.DataDictionary(appl_dict_path)
+		if self.appl_dictionary:
+			self.build_field_type_map(appl_dict_path)
+		else:
+			self.build_field_type_map(data_dict_path)
 
 	@staticmethod
 	def format_message(message: str, delim: str='|') -> str:
@@ -58,16 +61,19 @@ class MessageParser():
 
 	def build_value_dict(self, tag: int, value: str, entry_iter: Iterable[ET.Element]):
 		value_dict = {}
-		if not self.data_dictionary:
+		fix_dict = self.data_dictionary
+		if self.appl_dictionary:
+			fix_dict = self.appl_dictionary
+		if not fix_dict:
 			return value_dict
-		tag_name = self.data_dictionary.getFieldName(tag, "")[0]
+		tag_name = fix_dict.getFieldName(tag, "")[0]
 		if not tag_name:
 			tag_name = "Undefined tag"
 		value_dict["name"] = tag_name
 		value_dict["raw"] = value
 		translated_value = None
-		if self.data_dictionary.hasFieldValue(tag):
-			translated_value = self.data_dictionary.getValueName(tag, value, "")[0]
+		if fix_dict.hasFieldValue(tag):
+			translated_value = fix_dict.getValueName(tag, value, "")[0]
 		if not translated_value:
 			translated_value = value
 		value_dict["value"] = translated_value
@@ -83,6 +89,6 @@ class MessageParser():
 		return value_dict
 
 	def parse_msg(self, msg: str) -> OrderedDict:
-		fix_msg = qf.Message(MessageParser.inv_format_message(msg), self.data_dictionary, False)
+		fix_msg = qf.Message(MessageParser.inv_format_message(msg), self.data_dictionary, self.appl_dictionary, False)
 		msg_dict = self.msg_to_dict(fix_msg)
 		return msg_dict
