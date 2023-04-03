@@ -1,16 +1,30 @@
 import sys
+import os
 import yaml
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame
 from PyQt6.QtGui import QGuiApplication, QClipboard
 from message_parser import MessageParser
 from typing import OrderedDict, Tuple
 
+basedir = os.path.dirname(__file__)
+
+try:
+	# Only applicable for Windows application
+    from ctypes import windll
+    myappid = 'rkcoding.fixv.1'
+    windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except ImportError:
+    pass
+
 def get_fix_dict_path(app_config: dict) -> Tuple[dict, dict]:
 	if 'TransportDataDictionary' in app_config and 'AppDataDictionary' in app_config:
-		return (app_config['TransportDataDictionary'], app_config['AppDataDictionary'])
+		transport_dict_path = os.path.join(basedir, app_config['TransportDataDictionary'])
+		appl_dict_path = os.path.join(basedir, app_config['AppDataDictionary'])
+		return (transport_dict_path, appl_dict_path)
 	if 'DataDictionary' in app_config:
-		return (app_config['DataDictionary'], None)
+		data_dict_path = os.path.join(basedir, app_config['DataDictionary'])
+		return (data_dict_path, None)
 	return (None, None)
 
 def get_clipboard(clipboard: QClipboard) -> str:
@@ -47,18 +61,20 @@ class AppConfig():
 	expand_on_launch = True
 
 class MessageEditor(QDialog):
-	def __init__(self, msg_line: QTextEdit, parent = None) -> None:
+	apply_signal = QtCore.pyqtSignal()
+
+	def __init__(self, parent = None) -> None:
 		super().__init__(parent)
-		self.msg_line = msg_line
 		self.init_ui()
 
 	def init_ui(self):
 		self.setWindowTitle('Message Editor')
 		self.setModal(True)
-		self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
+		# self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
 
 		central_vbox = QVBoxLayout()
 		toolbar_hbox = QHBoxLayout()
+		toolbar_hbox.setSpacing(5)
 		copy_button = QPushButton('Copy')
 		paste_button = QPushButton('Paste')
 		clear_button = QPushButton('Clear')
@@ -78,6 +94,7 @@ class MessageEditor(QDialog):
 		central_vbox.addWidget(msg_text_edit)
 		central_vbox.addLayout(button_box)
 		button_box.addWidget(apply_button)
+		button_box.addStretch()
 		button_box.addWidget(cancel_button)
 
 		self.msg_text_edit = msg_text_edit
@@ -87,15 +104,8 @@ class MessageEditor(QDialog):
 		paste_button.clicked.connect(lambda: msg_text_edit.setText(get_clipboard(self.clipboard)))
 		clear_button.clicked.connect(msg_text_edit.clear)
 		cancel_button.clicked.connect(lambda: self.close())
-		apply_button.clicked.connect(self.apply_changes)
+		apply_button.clicked.connect(self.apply_signal)
 	
-	def apply_changes(self):
-		self.msg_line.setText(self.msg_text_edit.toPlainText())
-		self.close()
-
-	def set_message(self):
-		self.msg_text_edit.setText(self.msg_line.toPlainText())
-
 class AppWindow(QMainWindow):
 	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
@@ -139,7 +149,6 @@ class AppWindow(QMainWindow):
 	def init_ui(self):
 		self.setObjectName('MainWindow')
 		self.setWindowTitle('Fix Message Viewer')
-		self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
 		self.resize(500, 600)
 		self.setup_actions()
 		self.setup_menu()
@@ -148,13 +157,15 @@ class AppWindow(QMainWindow):
 		self.setCentralWidget(central_widget)
 
 		central_vbox = QVBoxLayout()
-		central_vbox.setContentsMargins(10, 10, 10, 10)
 
 		compact_container = QWidget()
+		compact_container.setStyleSheet('background-color:#85e0ff;')
+		compact_container.setContentsMargins(4, 4, 4, 4)
 		compact_vbox = QVBoxLayout()
 		compact_vbox.setContentsMargins(0, 0, 0, 0)
 		compact_label = QLabel('FIXV')
-		compact_label.setStyleSheet('QLabel { color : #abd4ce; }')
+		compact_label.setContentsMargins(6, 6, 6, 6)
+		compact_label.setStyleSheet('QLabel { color : white; background-color : black; }')
 
 		viewer_container = QWidget()
 		viewer_vbox = QVBoxLayout()
@@ -165,8 +176,6 @@ class AppWindow(QMainWindow):
 		toolbar_hbox.setContentsMargins(0, 0, 0, 0)
 		toolbar_hbox.setSpacing(20)
 		compact_button = QPushButton('Compact')
-		autopaste_checkbox = QCheckBox('AutoPaste')
-		autocompact_checkbox = QCheckBox('AutoCompact')
 
 		msg_entry_vbox = QVBoxLayout()
 		msg_entry_vbox.setSpacing(0)
@@ -174,24 +183,23 @@ class AppWindow(QMainWindow):
 		title_hbox.setSpacing(5)
 		title_hbox.setContentsMargins(0, 0, 0, 0)
 		msg_title_label = QLabel('Fix Message')
-		msg_title_label.setContentsMargins(5, 5, 5, 0)
+		msg_title_label.setContentsMargins(5, 0, 5, 0)
 		msg_title_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+		autocopy_checkbox = QCheckBox('AutoCopy  ')
+		seperator_line = QFrame()
+		seperator_line.setFrameShape(QFrame.Shape.VLine)
 		copy_button = QPushButton('Copy')
 		paste_button = QPushButton('Paste')
 		clear_button = QPushButton('Clear')
-		parse_button = QPushButton('Parse')
-		# msg_scrollarea = QScrollArea()
-		# msg_scrollarea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-		# msg_label = QLabel()
-		# msg_scrollarea.setFixedHeight(msg_label.sizeHint().height() + msg_scrollarea.horizontalScrollBar().height())
-		# msg_label = ScrollLabel()
-		# msg_label.setContentsMargins(8, 8, 8, 8)
-		# msg_label.setStyleSheet('QLabel { background-color : #222222; }')
+		# parse_button = QPushButton('Parse')
 		msg_line = QTextEdit()
 		msg_line.setReadOnly(True)
 		text_height = msg_line.document().documentLayout().documentSize().height()
 		msg_line.setFixedHeight(int(text_height) + 15)
 		msg_line.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+
+		actions_hbox = QHBoxLayout()
+		parse_button = QPushButton('Re-Parse')
 
 		output_tree = QTreeWidget()
 		output_tree.setColumnCount(3)
@@ -204,6 +212,7 @@ class AppWindow(QMainWindow):
 		TOOLBAR_HBOX = True
 		MSG_ENTRY_VBOX = True
 		TITLE_HBOX = True
+		ACTIONS_HBOX = True
 
 		central_widget.setLayout(central_vbox)
 		if CENTRAL_VBOX:
@@ -219,12 +228,10 @@ class AppWindow(QMainWindow):
 			if VIEWER_VBOX:
 				viewer_vbox.addLayout(toolbar_hbox)
 				viewer_vbox.addLayout(msg_entry_vbox)
+				viewer_vbox.addLayout(actions_hbox)
 
 				if TOOLBAR_HBOX:
 					toolbar_hbox.addWidget(compact_button)
-					toolbar_hbox.addStretch()
-					toolbar_hbox.addWidget(autopaste_checkbox)
-					toolbar_hbox.addWidget(autocompact_checkbox)
 
 				if MSG_ENTRY_VBOX:
 					msg_entry_vbox.addLayout(title_hbox)
@@ -232,26 +239,29 @@ class AppWindow(QMainWindow):
 					if TITLE_HBOX:
 						title_hbox.addWidget(msg_title_label)
 						title_hbox.addStretch()
+						title_hbox.addWidget(autocopy_checkbox)
+						title_hbox.addWidget(seperator_line)
 						title_hbox.addWidget(copy_button)
 						title_hbox.addWidget(paste_button)
 						title_hbox.addWidget(clear_button)
-						title_hbox.addWidget(parse_button)
 
-					# msg_entry_vbox.addWidget(msg_scrollarea)
-					# msg_scrollarea.setWidget(msg_label)
 					msg_entry_vbox.addWidget(msg_line)
+
+				if ACTIONS_HBOX:
+					actions_hbox.addWidget(parse_button)
+					actions_hbox.addStretch()
 
 				viewer_vbox.addWidget(output_tree)
 
 
 		## Export variable to self
+		self.central_vbox = central_vbox
 		self.central_widget = central_widget
 		self.compact_container = compact_container
 		self.compact_label = compact_label
 		self.viewer_container = viewer_container
 		self.compact_button = compact_button
-		self.autopaste_checkbox = autopaste_checkbox
-		self.autocompact_checkbox = autocompact_checkbox
+		self.autocopy_checkbox = autocopy_checkbox
 		self.msg_title_label = msg_title_label
 		self.copy_button = copy_button
 		self.paste_button = paste_button
@@ -259,33 +269,37 @@ class AppWindow(QMainWindow):
 		self.parse_button = parse_button
 		self.msg_line = msg_line
 		self.output_tree = output_tree
-		self.message_editor = MessageEditor(msg_line)
+		self.message_editor = MessageEditor()
 		self.clipboard = QGuiApplication.clipboard()
 
 	def setup_actions(self):
-		self.toggle_mode_act = QtGui.QAction('&Toggle Mode')
-		self.toggle_mode_act.setShortcut("Ctrl+T")
+		self.toggle_mode_act = QtGui.QAction('&Toggle Compact')
+		self.toggle_mode_act.setShortcut("Ctrl+M")
 		self.toggle_mode_act.triggered.connect(lambda: self.toggle_compact(not self.is_compact))
+		self.auto_compact_act = QtGui.QAction('&Auto Compact')
+		self.auto_compact_act.setCheckable(True)
+		self.auto_compact_act.toggled.connect(self.toggle_autocompact)
 		self.edit_message_act = QtGui.QAction('&Edit Message')
 		self.edit_message_act.setShortcut("Ctrl+E")
 		self.edit_message_act.triggered.connect(self.show_message_editor)
 		self.always_top_act = QtGui.QAction('&Always On Top')
 		self.always_top_act.setCheckable(True)
-		self.always_top_act.setShortcut("Ctrl+I")
-		self.always_top_act.toggled.connect(lambda checked: print(checked))
+		self.always_top_act.toggled.connect(self.toggle_stays_on_top)
+		self.always_top_act.toggle()
 
 	def setup_menu(self):
 		edit_menu = self.menuBar().addMenu("Edit")
 		edit_menu.addAction(self.edit_message_act)
 		view_menu = self.menuBar().addMenu("View")
 		view_menu.addAction(self.toggle_mode_act)
+		view_menu.addAction(self.auto_compact_act)
 		view_menu.addAction(self.always_top_act)
 
 	def init_logic(self):
+		self.message_editor.apply_signal.connect(self.apply_message_editor)
 		self.compact_label.mousePressEvent = lambda _: self.toggle_compact(False)
 		self.compact_button.clicked.connect(lambda: self.toggle_compact(True))
-		self.autopaste_checkbox.toggled.connect(self.toggle_autocopy)
-		self.autocompact_checkbox.toggled.connect(self.toggle_autocompact)
+		self.autocopy_checkbox.toggled.connect(self.toggle_autocopy)
 		self.copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, self.msg_line.toPlainText()))
 		self.paste_button.clicked.connect(self.paste_and_decode)
 		self.clear_button.clicked.connect(self.msg_line.clear)
@@ -298,15 +312,25 @@ class AppWindow(QMainWindow):
 	def toggle_compact(self, is_compact: bool):
 		if self.message_editor.isVisible():
 			return
+		prev_pos = self.pos()
+		prev_inner_frame_x = self.geometry().topLeft().x()
 		self.viewer_container.setVisible(not is_compact)
 		self.compact_container.setVisible(is_compact)
 		if is_compact:
+			self.central_vbox.setContentsMargins(0, 0, 0, 0)
 			self.prev_size = self.size()
+		else:
+			self.central_vbox.setContentsMargins(10, 10, 10, 10)
 		self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
 		self.central_widget.adjustSize()
 		self.adjustSize()
 		self.resize(self.prev_size if not is_compact else QtCore.QSize(0, 0))
 		self.is_compact = is_compact
+		self.show()
+		self.move(prev_inner_frame_x, prev_pos.y())
+
+	def toggle_stays_on_top(self, checked):
+		self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
 		self.show()
 
 	def autopaste_decode(self):
@@ -333,8 +357,13 @@ class AppWindow(QMainWindow):
 	def show_message_editor(self, *arg):
 		if self.is_compact:
 			return
-		self.message_editor.set_message()
+		self.message_editor.msg_text_edit.setText(self.msg_line.toPlainText())
 		self.message_editor.show()
+	
+	def apply_message_editor(self):
+		self.msg_line.setText(self.message_editor.msg_text_edit.toPlainText())
+		self.message_editor.close()
+		self.decode_and_show_msg()
 	
 	def paste_and_decode(self):
 		self.msg_line.setText(get_clipboard(self.clipboard))
@@ -376,10 +405,11 @@ if __name__ == "__main__":
 
 	app = QtWidgets.QApplication(sys.argv)
 	app.setApplicationName('FIX Viewer')
+	app.setWindowIcon(QtGui.QIcon(os.path.join(basedir, "assets", "appicon.ico")))
 	app_window = AppWindow(app)
 
 	# msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
-	# app_window.msg_label.setText(msg_string)
+	# app_window.msg_line.setText(msg_string)
 	# app_window.msg_label.setMinimumSize(app_window.msg_label.minimumSizeHint())
 
 	sys.exit(app.exec())
