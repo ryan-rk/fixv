@@ -50,7 +50,7 @@ class ScrollLabel(QScrollArea):
 
 	def setText(self, text):
 		self.label.setText(text)
-	
+
 	def text(self):
 		return self.label.text()
 
@@ -105,7 +105,7 @@ class MessageEditor(QDialog):
 		clear_button.clicked.connect(msg_text_edit.clear)
 		cancel_button.clicked.connect(lambda: self.close())
 		apply_button.clicked.connect(self.apply_signal)
-	
+
 class AppWindow(QMainWindow):
 	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
@@ -128,7 +128,7 @@ class AppWindow(QMainWindow):
 			   <p>Application will now exit.</p>""",
 			   QMessageBox.StandardButton.Ok)
 			sys.exit()
-		
+
 		self.msg_parser = None
 		if app_config:
 			data_dict_path, appl_dict_path = get_fix_dict_path(app_config)
@@ -150,6 +150,7 @@ class AppWindow(QMainWindow):
 		self.setObjectName('MainWindow')
 		self.setWindowTitle('Fix Message Viewer')
 		self.resize(500, 600)
+		self.move(0, 0)
 		self.setup_actions()
 		self.setup_menu()
 
@@ -159,13 +160,19 @@ class AppWindow(QMainWindow):
 		central_vbox = QVBoxLayout()
 
 		compact_container = QWidget()
-		compact_container.setStyleSheet('background-color:#85e0ff;')
-		compact_container.setContentsMargins(4, 4, 4, 4)
-		compact_vbox = QVBoxLayout()
-		compact_vbox.setContentsMargins(0, 0, 0, 0)
-		compact_label = QLabel('FIXV')
-		compact_label.setContentsMargins(6, 6, 6, 6)
-		compact_label.setStyleSheet('QLabel { color : white; background-color : black; }')
+		compact_container.setStyleSheet('background-color:#bbbbbb;')
+		# compact_container.setStyleSheet('background-color:#85e0ff;')
+		# compact_container.setContentsMargins(4, 4, 4, 4)
+		# compact_vbox = QVBoxLayout()
+		# compact_vbox.setContentsMargins(0, 0, 0, 0)
+		# compact_frame = QFrame()
+		# compact_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+		# compact_frame.setStyleSheet('background-color:black;')
+		# compact_line.setLineWidth(3)
+		# compact_label = QLabel('Expand')
+		# compact_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+		# compact_label.setContentsMargins(5, 5, 5, 5)
+		# compact_label.setStyleSheet('QLabel { color : white; background-color : black; }')
 
 		viewer_container = QWidget()
 		viewer_vbox = QVBoxLayout()
@@ -181,17 +188,16 @@ class AppWindow(QMainWindow):
 		msg_entry_vbox.setSpacing(0)
 		title_hbox = QHBoxLayout()
 		title_hbox.setSpacing(5)
-		title_hbox.setContentsMargins(0, 0, 0, 0)
+		title_hbox.setContentsMargins(0, 0, 0, 10)
 		msg_title_label = QLabel('Fix Message')
 		msg_title_label.setContentsMargins(5, 0, 5, 0)
 		msg_title_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-		autocopy_checkbox = QCheckBox('AutoCopy  ')
+		autopaste_checkbox = QCheckBox('AutoPaste  ')
 		seperator_line = QFrame()
 		seperator_line.setFrameShape(QFrame.Shape.VLine)
 		copy_button = QPushButton('Copy')
 		paste_button = QPushButton('Paste')
 		clear_button = QPushButton('Clear')
-		# parse_button = QPushButton('Parse')
 		msg_line = QTextEdit()
 		msg_line.setReadOnly(True)
 		text_height = msg_line.document().documentLayout().documentSize().height()
@@ -207,7 +213,7 @@ class AppWindow(QMainWindow):
 
 
 		CENTRAL_VBOX = True
-		COMPACT_VBOX = True
+		# COMPACT_VBOX = True
 		VIEWER_VBOX = True
 		TOOLBAR_HBOX = True
 		MSG_ENTRY_VBOX = True
@@ -217,10 +223,11 @@ class AppWindow(QMainWindow):
 		central_widget.setLayout(central_vbox)
 		if CENTRAL_VBOX:
 			central_vbox.addWidget(compact_container)
-			compact_container.setLayout(compact_vbox)
+			# compact_container.setLayout(compact_vbox)
 
-			if COMPACT_VBOX:
-				compact_vbox.addWidget(compact_label)
+			# if COMPACT_VBOX:
+				# compact_vbox.addWidget(compact_label)
+				# compact_vbox.addWidget(compact_frame)
 
 			central_vbox.addWidget(viewer_container)
 			viewer_container.setLayout(viewer_vbox)
@@ -239,7 +246,7 @@ class AppWindow(QMainWindow):
 					if TITLE_HBOX:
 						title_hbox.addWidget(msg_title_label)
 						title_hbox.addStretch()
-						title_hbox.addWidget(autocopy_checkbox)
+						title_hbox.addWidget(autopaste_checkbox)
 						title_hbox.addWidget(seperator_line)
 						title_hbox.addWidget(copy_button)
 						title_hbox.addWidget(paste_button)
@@ -258,10 +265,10 @@ class AppWindow(QMainWindow):
 		self.central_vbox = central_vbox
 		self.central_widget = central_widget
 		self.compact_container = compact_container
-		self.compact_label = compact_label
+		# self.compact_label = compact_label
 		self.viewer_container = viewer_container
 		self.compact_button = compact_button
-		self.autocopy_checkbox = autocopy_checkbox
+		self.autopaste_checkbox = autopaste_checkbox
 		self.msg_title_label = msg_title_label
 		self.copy_button = copy_button
 		self.paste_button = paste_button
@@ -273,16 +280,15 @@ class AppWindow(QMainWindow):
 		self.clipboard = QGuiApplication.clipboard()
 
 	def setup_actions(self):
-		self.toggle_mode_act = QtGui.QAction('&Toggle Compact')
-		self.toggle_mode_act.setShortcut("Ctrl+M")
-		self.toggle_mode_act.triggered.connect(lambda: self.toggle_compact(not self.is_compact))
 		self.auto_compact_act = QtGui.QAction('&Auto Compact')
 		self.auto_compact_act.setCheckable(True)
+		self.auto_compact_act.setShortcut('Ctrl+O')
 		self.auto_compact_act.toggled.connect(self.toggle_autocompact)
 		self.edit_message_act = QtGui.QAction('&Edit Message')
-		self.edit_message_act.setShortcut("Ctrl+E")
+		self.edit_message_act.setShortcut('Ctrl+E')
 		self.edit_message_act.triggered.connect(self.show_message_editor)
 		self.always_top_act = QtGui.QAction('&Always On Top')
+		self.always_top_act.setShortcut('Ctrl+T')
 		self.always_top_act.setCheckable(True)
 		self.always_top_act.toggled.connect(self.toggle_stays_on_top)
 		self.always_top_act.toggle()
@@ -291,43 +297,67 @@ class AppWindow(QMainWindow):
 		edit_menu = self.menuBar().addMenu("Edit")
 		edit_menu.addAction(self.edit_message_act)
 		view_menu = self.menuBar().addMenu("View")
-		view_menu.addAction(self.toggle_mode_act)
 		view_menu.addAction(self.auto_compact_act)
 		view_menu.addAction(self.always_top_act)
 
 	def init_logic(self):
+		self.is_compact = False
+		self.is_autocompact = False
+
 		self.message_editor.apply_signal.connect(self.apply_message_editor)
-		self.compact_label.mousePressEvent = lambda _: self.toggle_compact(False)
+		self.compact_container.mousePressEvent = lambda _: self.toggle_compact(False)
+		# self.compact_label.mousePressEvent = lambda _: self.toggle_compact(False)
 		self.compact_button.clicked.connect(lambda: self.toggle_compact(True))
-		self.autocopy_checkbox.toggled.connect(self.toggle_autocopy)
+		self.autopaste_checkbox.toggled.connect(self.toggle_autopaste)
 		self.copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, self.msg_line.toPlainText()))
 		self.paste_button.clicked.connect(self.paste_and_decode)
 		self.clear_button.clicked.connect(self.msg_line.clear)
 		self.parse_button.clicked.connect(self.decode_and_show_msg)
 		self.msg_line.mousePressEvent = self.show_message_editor
 		self.compact_container.setVisible(False)
-		self.is_compact = False
 		self.prev_size = self.size()
+		self.toggle_compact_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+M'), self)
+		self.toggle_compact_sc.activated.connect(lambda: self.toggle_compact(not self.is_compact))
+		self.toggle_autopaste_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Shift+P'), self)
+		self.toggle_autopaste_sc.activated.connect(lambda: self.autopaste_checkbox.toggle())
+		self.paste_decode_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+P'), self)
+		self.paste_decode_sc.activated.connect(self.paste_and_decode)
+		# self.toggle_autopaste.activated.connect(lambda: print('toggle'))
 
 	def toggle_compact(self, is_compact: bool):
 		if self.message_editor.isVisible():
 			return
-		prev_pos = self.pos()
-		prev_inner_frame_x = self.geometry().topLeft().x()
+		# prev_inner_frame_x = self.geometry().topLeft().x()
+		# prev_pos = self.pos()
+		# frame_height = self.frameSize().height() - self.size().height()
 		self.viewer_container.setVisible(not is_compact)
 		self.compact_container.setVisible(is_compact)
 		if is_compact:
+			self.menuBar().hide()
 			self.central_vbox.setContentsMargins(0, 0, 0, 0)
 			self.prev_size = self.size()
+			self.mousePressEvent
 		else:
+			self.menuBar().show()
 			self.central_vbox.setContentsMargins(10, 10, 10, 10)
-		self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
-		self.central_widget.adjustSize()
+		# self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
+		# self.compact_label.adjustSize()
+		# self.compact_container.adjustSize()
+		# self.central_widget.adjustSize()
 		self.adjustSize()
-		self.resize(self.prev_size if not is_compact else QtCore.QSize(0, 0))
+		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_label.minimumHeight()))
+		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_line.minimumHeight()))
+		self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), 12))
+		# print(self.sizeHint())
+		# self.resize(self.prev_size if not is_compact else QtCore.QSize(0, 0))
+		# if is_compact:
+		# 	self.move(prev_inner_frame_x, prev_pos.y() - frame_height)
+		# else:
+		# 	self.resize(self.prev_size)
+		# 	self.move(prev_inner_frame_x, prev_pos.y())
+		# self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
+		# self.show()
 		self.is_compact = is_compact
-		self.show()
-		self.move(prev_inner_frame_x, prev_pos.y())
 
 	def toggle_stays_on_top(self, checked):
 		self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
@@ -338,37 +368,48 @@ class AppWindow(QMainWindow):
 			return
 		self.paste_and_decode()
 
-	def toggle_autocopy(self, checked: bool):
+	def toggle_autopaste(self, checked: bool):
 		if checked:
 			self.clipboard.changed.connect(self.autopaste_decode)
 		else:
 			self.clipboard.changed.disconnect(self.autopaste_decode)
 
-	def on_focus_changed(self):
-		if not self.isActiveWindow() and not self.is_compact:
-			self.toggle_compact(True)
+	def changeEvent(self, e: QtCore.QEvent) -> None:
+		if e.type() == QtCore.QEvent.Type.ActivationChange:
+			if self.isActiveWindow():
+				if self.is_compact:
+					self.toggle_compact(False)
+			else:
+				if self.is_autocompact and not self.is_compact:
+					self.toggle_compact(True)
+		return super().changeEvent(e)
+
+	# def on_focus_changed(self):
+	# 	if not self.isActiveWindow() and not self.is_compact:
+	# 		self.toggle_compact(True)
 
 	def toggle_autocompact(self, checked: bool):
-		if checked:
-			self.app.focusChanged.connect(self.on_focus_changed)
-		else:
-			self.app.focusChanged.disconnect(self.on_focus_changed)
+		self.is_autocompact = checked
+		# if checked:
+		# 	self.app.focusChanged.connect(self.on_focus_changed)
+		# else:
+		# 	self.app.focusChanged.disconnect(self.on_focus_changed)
 
 	def show_message_editor(self, *arg):
 		if self.is_compact:
 			return
 		self.message_editor.msg_text_edit.setText(self.msg_line.toPlainText())
 		self.message_editor.show()
-	
+
 	def apply_message_editor(self):
 		self.msg_line.setText(self.message_editor.msg_text_edit.toPlainText())
 		self.message_editor.close()
 		self.decode_and_show_msg()
-	
+
 	def paste_and_decode(self):
-		self.msg_line.setText(get_clipboard(self.clipboard))
+		self.msg_line.setText(get_clipboard(self.clipboard).replace('\n', '').replace('\r', ''))
 		self.decode_and_show_msg()
-	
+
 	def decode_and_show_msg(self):
 		try:
 			msg_dict = self.msg_parser.parse_msg(self.msg_line.toPlainText())
@@ -376,7 +417,7 @@ class AppWindow(QMainWindow):
 		except Exception as error:
 			QMessageBox.warning(self, "Error",
 		       f"""<h2>Message Parsing Error</h2>
-			   <p>{error}</p>""",
+			   <p>{type(error).__name__}: {error}</p>""",
 			   QMessageBox.StandardButton.Ok)
 
 	def setup_output_tree(self, msg_dict: OrderedDict) -> QTreeWidget:

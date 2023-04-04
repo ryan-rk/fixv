@@ -40,10 +40,11 @@ class MessageParser():
 
 	def parse_field_value(self, field_group: ET.Element):
 		tmp_dict = OrderedDict()
-		entry_iter = iter(field_group)
+		# entry_iter = iter(field_group)
+		entry_iter = field_group.iterfind('./')
 		untag_group_index = 0
 		while True:
-			try:	
+			try:
 				entry = next(entry_iter)
 				if (entry.tag == 'field'):
 					field_tag = int(entry.get('number'))
