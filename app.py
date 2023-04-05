@@ -1,6 +1,6 @@
 import sys
 import os
-import yaml
+import configparser
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame
 from PyQt6.QtGui import QGuiApplication, QClipboard
@@ -111,27 +111,25 @@ class AppWindow(QMainWindow):
 		super().__init__()
 
 		# Setting up app config and initialize message parser
-		app_config_file_name = 'app_config.yaml'
-		app_config = None
-		try:
-			with open(app_config_file_name, 'r') as f:
-				app_config = yaml.safe_load(f)
-		except FileNotFoundError as e:
+		app_config_file_name = 'app_config.ini'
+		app_config = configparser.ConfigParser()
+		if len(app_config.read(os.path.join(basedir, app_config_file_name))) == 0:
 			QMessageBox.warning(self, "Error",
 		       f"""<p>Config file not found. Please ensure that "{app_config_file_name}" file exists.</p>
 			   <p>Application will now exit.</p>""",
 			   QMessageBox.StandardButton.Ok)
 			sys.exit()
-		except Exception as e:
+		if not app_config.defaults:
 			QMessageBox.warning(self, "Error",
 		       f"""<p>Error reading in config file. Please ensure that config file is in correct format.</p>
 			   <p>Application will now exit.</p>""",
 			   QMessageBox.StandardButton.Ok)
 			sys.exit()
+		default_config = app_config['DEFAULT']
 
 		self.msg_parser = None
-		if app_config:
-			data_dict_path, appl_dict_path = get_fix_dict_path(app_config)
+		if default_config:
+			data_dict_path, appl_dict_path = get_fix_dict_path(default_config)
 			if data_dict_path or appl_dict_path:
 				self.msg_parser = MessageParser(data_dict_path, appl_dict_path)
 
