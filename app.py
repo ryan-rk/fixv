@@ -1,6 +1,7 @@
 import sys
 import os
 import configparser
+import xml.etree.ElementTree as ET
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame
 from PyQt6.QtGui import QGuiApplication, QClipboard
@@ -57,9 +58,6 @@ class ScrollLabel(QScrollArea):
 	def clear(self):
 		self.label.clear()
 
-class AppConfig():
-	expand_on_launch = True
-
 class MessageEditor(QDialog):
 	apply_signal = QtCore.pyqtSignal()
 
@@ -110,6 +108,7 @@ class AppWindow(QMainWindow):
 	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
 
+		self.expand_on_launch = True
 		# Setting up app config and initialize message parser
 		app_config_file_name = 'app_config.ini'
 		app_config = configparser.ConfigParser()
@@ -320,6 +319,8 @@ class AppWindow(QMainWindow):
 		self.toggle_autopaste_sc.activated.connect(lambda: self.autopaste_checkbox.toggle())
 		self.paste_decode_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+P'), self)
 		self.paste_decode_sc.activated.connect(self.paste_and_decode)
+		self.reparse_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+R'), self)
+		self.reparse_sc.activated.connect(self.decode_and_show_msg)
 		# self.toggle_autopaste.activated.connect(lambda: print('toggle'))
 
 	def toggle_compact(self, is_compact: bool):
@@ -410,13 +411,48 @@ class AppWindow(QMainWindow):
 
 	def decode_and_show_msg(self):
 		try:
-			msg_dict = self.msg_parser.parse_msg(self.msg_line.toPlainText())
-			self.setup_output_tree(msg_dict)
+			msg_tree = self.msg_parser.parse_msg(self.msg_line.toPlainText())
+			self.build_output_tree(msg_tree)
+			# self.setup_output_tree(msg_dict)
 		except Exception as error:
 			QMessageBox.warning(self, "Error",
 		       f"""<h2>Message Parsing Error</h2>
 			   <p>{type(error).__name__}: {error}</p>""",
 			   QMessageBox.StandardButton.Ok)
+
+	def build_output_tree(self, msg_tree: ET.Element):
+		self.output_tree.clear()
+		for section in msg_tree.iterfind('./'):
+			section_item = QTreeWidgetItem([section.tag])
+			self.output_tree.addTopLevelItem(section_item)
+			section_item.setExpanded(self.expand_on_launch)
+			self.build_tree_item(section, section_item)
+		for i in range(3):
+			self.output_tree.resizeColumnToContents(i)
+
+	def build_tree_item(self, msg_elem: ET.Element, tree_parent: QTreeWidgetItem):
+		for elem in msg_elem.iterfind('./'):
+			field_tag = elem.get('number') if 'number' in elem.attrib else elem.tag
+			field_name = elem.get('name') if 'name' in elem.attrib else None
+			field_raw = elem.get('raw') if 'raw' in elem.attrib else None
+			field_enum = elem.get('enum') if 'enum' in elem.attrib else None
+			field_value = None
+			if field_raw:
+				if field_enum:
+					field_value = f'{field_raw} ({field_enum})'
+				else:
+					field_value = field_raw
+			item_entries = [field_tag]
+			if field_name:
+				item_entries.append(field_name)
+			if field_value:
+				if len(item_entries) < 2:
+					item_entries.append('')
+				item_entries.append(field_value)
+			tree_item = QTreeWidgetItem(item_entries)
+			tree_parent.addChild(tree_item)
+			self.build_tree_item(elem, tree_item)
+			tree_item.setExpanded(self.expand_on_launch)
 
 	def setup_output_tree(self, msg_dict: OrderedDict) -> QTreeWidget:
 		self.output_tree.clear()
@@ -424,7 +460,7 @@ class AppWindow(QMainWindow):
 		for section, section_entries in msg_dict.items():
 			tree_item = QTreeWidgetItem([section])
 			self.output_tree.addTopLevelItem(tree_item)
-			tree_item.setExpanded(AppConfig.expand_on_launch)
+			# tree_item.setExpanded(AppConfig.expand_on_launch)
 			AppWindow.fill_tree_item(tree_item, section_entries)
 		for i in range(3):
 			self.output_tree.resizeColumnToContents(i)
@@ -433,7 +469,7 @@ class AppWindow(QMainWindow):
 		for k, v in msg_dict.items():
 			child = QTreeWidgetItem([str(k), str(v['name']), str(v['value'])])
 			item.addChild(child)
-			child.setExpanded(AppConfig.expand_on_launch)
+			# child.setExpanded(AppConfig.expand_on_launch)
 			groups = v['groups']
 			if groups:
 				for group in groups:
@@ -447,8 +483,7 @@ if __name__ == "__main__":
 	app.setWindowIcon(QtGui.QIcon(os.path.join(basedir, "assets", "appicon.ico")))
 	app_window = AppWindow(app)
 
-	# msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
-	# app_window.msg_line.setText(msg_string)
-	# app_window.msg_label.setMinimumSize(app_window.msg_label.minimumSizeHint())
+	msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
+	app_window.msg_line.setText(msg_string)
 
 	sys.exit(app.exec())
