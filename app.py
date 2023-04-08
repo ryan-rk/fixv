@@ -3,10 +3,10 @@ import os
 import configparser
 import xml.etree.ElementTree as ET
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame
+from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame, QStatusBar
 from PyQt6.QtGui import QGuiApplication, QClipboard
 from message_parser import MessageParser
-from typing import OrderedDict, Tuple
+from typing import Tuple
 
 basedir = os.path.dirname(__file__)
 
@@ -108,7 +108,6 @@ class AppWindow(QMainWindow):
 	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
 
-		self.expand_on_launch = True
 		# Setting up app config and initialize message parser
 		app_config_file_name = 'app_config.ini'
 		app_config = configparser.ConfigParser()
@@ -124,11 +123,11 @@ class AppWindow(QMainWindow):
 			   <p>Application will now exit.</p>""",
 			   QMessageBox.StandardButton.Ok)
 			sys.exit()
-		default_config = app_config['DEFAULT']
+		self.config = app_config['DEFAULT']
 
 		self.msg_parser = None
-		if default_config:
-			data_dict_path, appl_dict_path = get_fix_dict_path(default_config)
+		if self.config:
+			data_dict_path, appl_dict_path = get_fix_dict_path(self.config)
 			if data_dict_path or appl_dict_path:
 				self.msg_parser = MessageParser(data_dict_path, appl_dict_path)
 
@@ -157,11 +156,11 @@ class AppWindow(QMainWindow):
 		central_vbox = QVBoxLayout()
 
 		compact_container = QWidget()
-		compact_container.setStyleSheet('background-color:#bbbbbb;')
+		# compact_container.setStyleSheet('background-color:black;')
 		# compact_container.setStyleSheet('background-color:#85e0ff;')
 		# compact_container.setContentsMargins(4, 4, 4, 4)
-		# compact_vbox = QVBoxLayout()
-		# compact_vbox.setContentsMargins(0, 0, 0, 0)
+		compact_vbox = QVBoxLayout()
+		compact_vbox.setContentsMargins(5, 5, 5, 5)
 		# compact_frame = QFrame()
 		# compact_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 		# compact_frame.setStyleSheet('background-color:black;')
@@ -170,6 +169,9 @@ class AppWindow(QMainWindow):
 		# compact_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 		# compact_label.setContentsMargins(5, 5, 5, 5)
 		# compact_label.setStyleSheet('QLabel { color : white; background-color : black; }')
+		expand_arrow = QLabel()
+		expand_arrow.setPixmap(QtGui.QPixmap(os.path.join(basedir, "assets", "DownArrow.png")))
+		# expand_arrow.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
 		viewer_container = QWidget()
 		viewer_vbox = QVBoxLayout()
@@ -195,11 +197,18 @@ class AppWindow(QMainWindow):
 		copy_button = QPushButton('Copy')
 		paste_button = QPushButton('Paste')
 		clear_button = QPushButton('Clear')
+		msg_line_hbox = QHBoxLayout()
 		msg_line = QTextEdit()
 		msg_line.setReadOnly(True)
 		text_height = msg_line.document().documentLayout().documentSize().height()
 		msg_line.setFixedHeight(int(text_height) + 15)
 		msg_line.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+		msg_delim_label = QLabel('Delimiter:')
+		msg_delim_label.setContentsMargins(15, 0, 0, 0)
+		msg_delim_edit = QLineEdit('|')
+		msg_delim_edit.setMaxLength(1)
+		msg_delim_edit.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+		msg_delim_edit.setFixedWidth(25)
 
 		actions_hbox = QHBoxLayout()
 		parse_button = QPushButton('Re-Parse')
@@ -210,21 +219,21 @@ class AppWindow(QMainWindow):
 
 
 		CENTRAL_VBOX = True
-		# COMPACT_VBOX = True
+		COMPACT_VBOX = True
 		VIEWER_VBOX = True
 		TOOLBAR_HBOX = True
 		MSG_ENTRY_VBOX = True
 		TITLE_HBOX = True
+		MSG_LINE_HBOX = True
 		ACTIONS_HBOX = True
 
 		central_widget.setLayout(central_vbox)
 		if CENTRAL_VBOX:
 			central_vbox.addWidget(compact_container)
-			# compact_container.setLayout(compact_vbox)
+			compact_container.setLayout(compact_vbox)
 
-			# if COMPACT_VBOX:
-				# compact_vbox.addWidget(compact_label)
-				# compact_vbox.addWidget(compact_frame)
+			if COMPACT_VBOX:
+				compact_vbox.addWidget(expand_arrow, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
 
 			central_vbox.addWidget(viewer_container)
 			viewer_container.setLayout(viewer_vbox)
@@ -239,6 +248,7 @@ class AppWindow(QMainWindow):
 
 				if MSG_ENTRY_VBOX:
 					msg_entry_vbox.addLayout(title_hbox)
+					msg_entry_vbox.addLayout(msg_line_hbox)
 
 					if TITLE_HBOX:
 						title_hbox.addWidget(msg_title_label)
@@ -249,7 +259,13 @@ class AppWindow(QMainWindow):
 						title_hbox.addWidget(paste_button)
 						title_hbox.addWidget(clear_button)
 
-					msg_entry_vbox.addWidget(msg_line)
+					if MSG_LINE_HBOX:
+						msg_line_hbox.addWidget(msg_line)
+						msg_line_hbox.addWidget(msg_delim_label)
+						msg_line_hbox.addWidget(msg_delim_edit)
+						# msg_line_hbox.addLayout(msg_delim_hbox)
+						# msg_delim_hbox.addWidget(msg_delim_label)
+						# msg_delim_hbox.addWidget(msg_delim_edit)
 
 				if ACTIONS_HBOX:
 					actions_hbox.addWidget(parse_button)
@@ -272,9 +288,11 @@ class AppWindow(QMainWindow):
 		self.clear_button = clear_button
 		self.parse_button = parse_button
 		self.msg_line = msg_line
+		self.msg_delim_edit = msg_delim_edit
 		self.output_tree = output_tree
 		self.message_editor = MessageEditor()
 		self.clipboard = QGuiApplication.clipboard()
+		self.statusBar = QStatusBar()
 
 	def setup_actions(self):
 		self.auto_compact_act = QtGui.QAction('&Auto Compact')
@@ -288,14 +306,32 @@ class AppWindow(QMainWindow):
 		self.always_top_act.setShortcut('Ctrl+T')
 		self.always_top_act.setCheckable(True)
 		self.always_top_act.toggled.connect(self.toggle_stays_on_top)
-		self.always_top_act.toggle()
+		if 'AlwaysOnTop' in self.config:
+			self.always_top_act.toggle()
+		self.show_err_msg_act = QtGui.QAction('&Show Message')
+		self.show_err_msg_act.setCheckable(True)
+		self.show_err_status_act = QtGui.QAction('&Show in Status Bar')
+		self.show_err_status_act.setCheckable(True)
+		self.no_show_err_act = QtGui.QAction('&Hide Error')
+		self.no_show_err_act.setCheckable(True)
+		self.err_act_grp = QtGui.QActionGroup(self)
+		self.err_act_grp.addAction(self.show_err_msg_act)
+		self.err_act_grp.addAction(self.show_err_status_act)
+		self.err_act_grp.addAction(self.no_show_err_act)
+		self.err_act_grp.triggered.connect(self.change_error_notification)
+		self.show_err_msg_act.setChecked(True)
+		self.change_error_notification(self.show_err_msg_act)
 
 	def setup_menu(self):
-		edit_menu = self.menuBar().addMenu("Edit")
+		edit_menu = self.menuBar().addMenu('Edit')
 		edit_menu.addAction(self.edit_message_act)
-		view_menu = self.menuBar().addMenu("View")
+		view_menu = self.menuBar().addMenu('View')
 		view_menu.addAction(self.auto_compact_act)
 		view_menu.addAction(self.always_top_act)
+		error_menu = view_menu.addMenu('Error')
+		error_menu.addAction(self.show_err_msg_act)
+		error_menu.addAction(self.show_err_status_act)
+		error_menu.addAction(self.no_show_err_act)
 
 	def init_logic(self):
 		self.is_compact = False
@@ -323,6 +359,8 @@ class AppWindow(QMainWindow):
 		self.reparse_sc.activated.connect(self.decode_and_show_msg)
 		# self.toggle_autopaste.activated.connect(lambda: print('toggle'))
 
+		self.setStatusBar(self.statusBar)
+
 	def toggle_compact(self, is_compact: bool):
 		if self.message_editor.isVisible():
 			return
@@ -333,11 +371,13 @@ class AppWindow(QMainWindow):
 		self.compact_container.setVisible(is_compact)
 		if is_compact:
 			self.menuBar().hide()
+			self.statusBar.hide()
 			self.central_vbox.setContentsMargins(0, 0, 0, 0)
 			self.prev_size = self.size()
 			self.mousePressEvent
 		else:
 			self.menuBar().show()
+			self.statusBar.show()
 			self.central_vbox.setContentsMargins(10, 10, 10, 10)
 		# self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
 		# self.compact_label.adjustSize()
@@ -361,6 +401,14 @@ class AppWindow(QMainWindow):
 	def toggle_stays_on_top(self, checked):
 		self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
 		self.show()
+
+	def change_error_notification(self, qaction: QtGui.QAction):
+		self.is_show_err_msg = False
+		self.is_show_err_status = False
+		if qaction == self.show_err_msg_act:
+			self.is_show_err_msg = True
+		elif qaction == self.show_err_status_act:
+			self.is_show_err_status = True
 
 	def autopaste_decode(self):
 		if self.message_editor.isVisible():
@@ -411,23 +459,27 @@ class AppWindow(QMainWindow):
 
 	def decode_and_show_msg(self):
 		try:
-			msg_tree = self.msg_parser.parse_msg(self.msg_line.toPlainText())
+			self.output_tree.clear()
+			self.statusBar.clearMessage()
+			msg_tree = self.msg_parser.parse_msg(self.msg_line.toPlainText(), self.msg_delim_edit.text() if self.msg_delim_edit.text() else '|')
 			self.build_output_tree(msg_tree)
-			# self.setup_output_tree(msg_dict)
+			self.statusBar.showMessage('Successfully parsed')
 		except Exception as error:
-			QMessageBox.warning(self, "Error",
-		       f"""<h2>Message Parsing Error</h2>
-			   <p>{type(error).__name__}: {error}</p>""",
-			   QMessageBox.StandardButton.Ok)
+			error_msg = f'[{type(error).__name__}Error] {error}' 
+			if self.is_show_err_msg:
+				QMessageBox.warning(self, "Error", f"""<h2>Message Parsing Error</h2>
+					<p>{error_msg}</p>""", QMessageBox.StandardButton.Ok)
+			elif self.is_show_err_status:
+				self.statusBar.showMessage(error_msg)
 
 	def build_output_tree(self, msg_tree: ET.Element):
-		self.output_tree.clear()
 		for section in msg_tree.iterfind('./'):
 			section_item = QTreeWidgetItem([section.tag])
 			self.output_tree.addTopLevelItem(section_item)
-			section_item.setExpanded(self.expand_on_launch)
+			section_item.setExpanded(True if 'ExpandOnLaunch' in self.config else False)
 			self.build_tree_item(section, section_item)
-		for i in range(3):
+		# Only resize the first and second column
+		for i in range(2):
 			self.output_tree.resizeColumnToContents(i)
 
 	def build_tree_item(self, msg_elem: ET.Element, tree_parent: QTreeWidgetItem):
@@ -452,29 +504,7 @@ class AppWindow(QMainWindow):
 			tree_item = QTreeWidgetItem(item_entries)
 			tree_parent.addChild(tree_item)
 			self.build_tree_item(elem, tree_item)
-			tree_item.setExpanded(self.expand_on_launch)
-
-	def setup_output_tree(self, msg_dict: OrderedDict) -> QTreeWidget:
-		self.output_tree.clear()
-		# Fill sections (header, body, trailer)
-		for section, section_entries in msg_dict.items():
-			tree_item = QTreeWidgetItem([section])
-			self.output_tree.addTopLevelItem(tree_item)
-			# tree_item.setExpanded(AppConfig.expand_on_launch)
-			AppWindow.fill_tree_item(tree_item, section_entries)
-		for i in range(3):
-			self.output_tree.resizeColumnToContents(i)
-
-	def fill_tree_item(item: QTreeWidgetItem, msg_dict: OrderedDict):
-		for k, v in msg_dict.items():
-			child = QTreeWidgetItem([str(k), str(v['name']), str(v['value'])])
-			item.addChild(child)
-			# child.setExpanded(AppConfig.expand_on_launch)
-			groups = v['groups']
-			if groups:
-				for group in groups:
-					AppWindow.fill_tree_item(child, group)
-
+			tree_item.setExpanded(True if 'ExpandOnLaunch' in self.config else False)
 
 if __name__ == "__main__":
 
@@ -483,7 +513,7 @@ if __name__ == "__main__":
 	app.setWindowIcon(QtGui.QIcon(os.path.join(basedir, "assets", "appicon.ico")))
 	app_window = AppWindow(app)
 
-	msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|10=225|'
+	msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|528=10|10=225|'
 	app_window.msg_line.setText(msg_string)
 
 	sys.exit(app.exec())
