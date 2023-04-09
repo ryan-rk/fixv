@@ -144,7 +144,7 @@ class AppWindow(QMainWindow):
 
 	def init_ui(self):
 		self.setObjectName('MainWindow')
-		self.setWindowTitle('Fix Message Viewer')
+		self.setWindowTitle('FIXV')
 		self.resize(500, 600)
 		self.move(0, 0)
 		self.setup_actions()
@@ -156,22 +156,12 @@ class AppWindow(QMainWindow):
 		central_vbox = QVBoxLayout()
 
 		compact_container = QWidget()
-		# compact_container.setStyleSheet('background-color:black;')
-		# compact_container.setStyleSheet('background-color:#85e0ff;')
-		# compact_container.setContentsMargins(4, 4, 4, 4)
 		compact_vbox = QVBoxLayout()
 		compact_vbox.setContentsMargins(5, 5, 5, 5)
-		# compact_frame = QFrame()
-		# compact_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-		# compact_frame.setStyleSheet('background-color:black;')
-		# compact_line.setLineWidth(3)
-		# compact_label = QLabel('Expand')
-		# compact_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-		# compact_label.setContentsMargins(5, 5, 5, 5)
-		# compact_label.setStyleSheet('QLabel { color : white; background-color : black; }')
+		compact_vbox.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 		expand_arrow = QLabel()
 		expand_arrow.setPixmap(QtGui.QPixmap(os.path.join(basedir, "assets", "DownArrow.png")))
-		# expand_arrow.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+		# expand_arrow.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
 		viewer_container = QWidget()
 		viewer_vbox = QVBoxLayout()
@@ -201,11 +191,18 @@ class AppWindow(QMainWindow):
 		msg_line = QTextEdit()
 		msg_line.setReadOnly(True)
 		text_height = msg_line.document().documentLayout().documentSize().height()
-		msg_line.setFixedHeight(int(text_height) + 15)
+		msg_line.setFixedHeight(int(text_height) + 20)
 		msg_line.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+		msg_delim_hbox = QHBoxLayout()
+		msg_delim_hbox.setContentsMargins(15, 0, 0, 0)
+		msg_delim_hbox.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 		msg_delim_label = QLabel('Delimiter:')
-		msg_delim_label.setContentsMargins(15, 0, 0, 0)
+		# print(msg_delim_label.sizePolicy().verticalPolicy())
+		msg_delim_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+		# msg_delim_label.setContentsMargins(15, 5, 0, 0)
 		msg_delim_edit = QLineEdit('|')
+		# msg_delim_edit.setContentsMargins(0, 5, 0, 0)
+		msg_delim_edit.setTextMargins(5, 5, 5, 5)
 		msg_delim_edit.setMaxLength(1)
 		msg_delim_edit.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 		msg_delim_edit.setFixedWidth(25)
@@ -225,6 +222,7 @@ class AppWindow(QMainWindow):
 		MSG_ENTRY_VBOX = True
 		TITLE_HBOX = True
 		MSG_LINE_HBOX = True
+		MSG_DELIM_HBOX = True
 		ACTIONS_HBOX = True
 
 		central_widget.setLayout(central_vbox)
@@ -233,7 +231,7 @@ class AppWindow(QMainWindow):
 			compact_container.setLayout(compact_vbox)
 
 			if COMPACT_VBOX:
-				compact_vbox.addWidget(expand_arrow, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+				compact_vbox.addWidget(expand_arrow)
 
 			central_vbox.addWidget(viewer_container)
 			viewer_container.setLayout(viewer_vbox)
@@ -261,11 +259,11 @@ class AppWindow(QMainWindow):
 
 					if MSG_LINE_HBOX:
 						msg_line_hbox.addWidget(msg_line)
-						msg_line_hbox.addWidget(msg_delim_label)
-						msg_line_hbox.addWidget(msg_delim_edit)
-						# msg_line_hbox.addLayout(msg_delim_hbox)
-						# msg_delim_hbox.addWidget(msg_delim_label)
-						# msg_delim_hbox.addWidget(msg_delim_edit)
+						msg_line_hbox.addLayout(msg_delim_hbox)
+
+						if MSG_DELIM_HBOX:
+							msg_delim_hbox.addWidget(msg_delim_label)
+							msg_delim_hbox.addWidget(msg_delim_edit)
 
 				if ACTIONS_HBOX:
 					actions_hbox.addWidget(parse_button)
@@ -349,6 +347,7 @@ class AppWindow(QMainWindow):
 		self.msg_line.mousePressEvent = self.show_message_editor
 		self.compact_container.setVisible(False)
 		self.prev_size = self.size()
+		self.prev_compact_size = None
 		self.toggle_compact_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+M'), self)
 		self.toggle_compact_sc.activated.connect(lambda: self.toggle_compact(not self.is_compact))
 		self.toggle_autopaste_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Shift+P'), self)
@@ -367,15 +366,19 @@ class AppWindow(QMainWindow):
 		# prev_inner_frame_x = self.geometry().topLeft().x()
 		# prev_pos = self.pos()
 		# frame_height = self.frameSize().height() - self.size().height()
-		self.viewer_container.setVisible(not is_compact)
-		self.compact_container.setVisible(is_compact)
+		# self.viewer_container.setVisible(not is_compact)
+		# self.compact_container.setVisible(is_compact)
 		if is_compact:
+			self.prev_size = self.size()
+			self.viewer_container.setVisible(False)
+			self.compact_container.setVisible(True)
 			self.menuBar().hide()
 			self.statusBar.hide()
 			self.central_vbox.setContentsMargins(0, 0, 0, 0)
-			self.prev_size = self.size()
-			self.mousePressEvent
 		else:
+			self.prev_compact_size = self.size()
+			self.viewer_container.setVisible(True)
+			self.compact_container.setVisible(False)
 			self.menuBar().show()
 			self.statusBar.show()
 			self.central_vbox.setContentsMargins(10, 10, 10, 10)
@@ -386,7 +389,8 @@ class AppWindow(QMainWindow):
 		self.adjustSize()
 		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_label.minimumHeight()))
 		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_line.minimumHeight()))
-		self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), 12))
+		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), 12))
+		self.resize(self.prev_size if not is_compact else (self.prev_compact_size if self.prev_compact_size else QtCore.QSize(self.size().width(), 12)))
 		# print(self.sizeHint())
 		# self.resize(self.prev_size if not is_compact else QtCore.QSize(0, 0))
 		# if is_compact:
