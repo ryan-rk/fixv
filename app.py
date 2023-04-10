@@ -18,16 +18,6 @@ try:
 except ImportError:
     pass
 
-def get_fix_dict_path(app_config: dict) -> Tuple[dict, dict]:
-	if 'TransportDataDictionary' in app_config and 'AppDataDictionary' in app_config:
-		transport_dict_path = os.path.join(basedir, app_config['TransportDataDictionary'])
-		appl_dict_path = os.path.join(basedir, app_config['AppDataDictionary'])
-		return (transport_dict_path, appl_dict_path)
-	if 'DataDictionary' in app_config:
-		data_dict_path = os.path.join(basedir, app_config['DataDictionary'])
-		return (data_dict_path, None)
-	return (None, None)
-
 def get_clipboard(clipboard: QClipboard) -> str:
 	mime_data = clipboard.mimeData()
 	if mime_data.hasText():
@@ -37,26 +27,6 @@ def get_clipboard(clipboard: QClipboard) -> str:
 def set_clipboard(clipboard: QClipboard, source: str):
 	clipboard.setText(source)
 
-
-class ScrollLabel(QScrollArea):
-	def __init__(self, parent = None) -> None:
-		super().__init__(parent)
-		self.setWidgetResizable(True)
-		content = QWidget(self)
-		self.setWidget(content)
-		content_vbox = QVBoxLayout(content)
-		label = QLabel(content)
-		content_vbox.addWidget(label)
-		self.label = label
-
-	def setText(self, text):
-		self.label.setText(text)
-
-	def text(self):
-		return self.label.text()
-
-	def clear(self):
-		self.label.clear()
 
 class MessageEditor(QDialog):
 	apply_signal = QtCore.pyqtSignal()
@@ -68,7 +38,6 @@ class MessageEditor(QDialog):
 	def init_ui(self):
 		self.setWindowTitle('Message Editor')
 		self.setModal(True)
-		# self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
 
 		central_vbox = QVBoxLayout()
 		toolbar_hbox = QHBoxLayout()
@@ -96,6 +65,7 @@ class MessageEditor(QDialog):
 		button_box.addWidget(cancel_button)
 
 		self.msg_text_edit = msg_text_edit
+		self.msg_text_edit.installEventFilter(self)
 		self.clipboard = QGuiApplication.clipboard()
 
 		copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, msg_text_edit.toPlainText()))
@@ -104,43 +74,76 @@ class MessageEditor(QDialog):
 		cancel_button.clicked.connect(lambda: self.close())
 		apply_button.clicked.connect(self.apply_signal)
 
+	def eventFilter(self, widget, event):
+		if event.type() == QtCore.QEvent.Type.KeyPress and widget is self.msg_text_edit:
+			if event.key() == QtCore.Qt.Key.Key_Return and self.msg_text_edit.hasFocus():
+				self.apply_signal.emit()
+		return super().eventFilter(widget, event)
+
 class AppWindow(QMainWindow):
 	def __init__(self, app: QtWidgets.QApplication) -> None:
 		super().__init__()
 
 		# Setting up app config and initialize message parser
 		app_config_file_name = 'app_config.ini'
-		app_config = configparser.ConfigParser()
-		if len(app_config.read(os.path.join(basedir, app_config_file_name))) == 0:
-			QMessageBox.warning(self, "Error",
-		       f"""<p>Config file not found. Please ensure that "{app_config_file_name}" file exists.</p>
-			   <p>Application will now exit.</p>""",
-			   QMessageBox.StandardButton.Ok)
-			sys.exit()
-		if not app_config.defaults:
-			QMessageBox.warning(self, "Error",
-		       f"""<p>Error reading in config file. Please ensure that config file is in correct format.</p>
-			   <p>Application will now exit.</p>""",
-			   QMessageBox.StandardButton.Ok)
-			sys.exit()
-		self.config = app_config['DEFAULT']
+		self.init_config(os.path.join(basedir, app_config_file_name))
+		self.msg_parser = self.build_msg_parser()
 
-		self.msg_parser = None
-		if self.config:
-			data_dict_path, appl_dict_path = get_fix_dict_path(self.config)
-			if data_dict_path or appl_dict_path:
-				self.msg_parser = MessageParser(data_dict_path, appl_dict_path)
-
-		if not self.msg_parser:
-			QMessageBox.warning(self, "Error",
-		       f"""<p>Quickfix dictionary path incorrectly set. Please check the config file.</p>
-			   <p>Application will now exit.</p>""",
-			   QMessageBox.StandardButton.Ok)
-			sys.exit()
 		self.app = app
 		self.init_ui()
 		self.init_logic()
 		self.show()
+
+	def init_config(self, config_path: str):
+		app_config = configparser.ConfigParser()
+		if len(app_config.read(os.path.join(basedir, config_path))) == 0:
+			QMessageBox.warning(self, "Error",
+				f"""<p>Config file not found. Please ensure that config file exists.</p>
+				<p>Application will now exit.</p>""",
+				QMessageBox.StandardButton.Ok)
+			sys.exit()
+		if 'CONFIG' not in app_config.sections():
+			QMessageBox.warning(self, "Error",
+				f"""<p>Error reading in config file. Please ensure that config file is in correct format:</p>
+				<p>[CONFIG]<br>Option1: ...<br>Option2: ...</p>
+				<p>Application will now exit.</p>""",
+				QMessageBox.StandardButton.Ok)
+			sys.exit()
+		config = app_config['CONFIG']
+
+		transport_data_dictionary = config['TransportDataDictionary'] if 'TransportDataDictionary' in config else ''
+		app_data_dictionary = config['AppDataDictionary'] if 'AppDataDictionary' in config else ''
+		if transport_data_dictionary and app_data_dictionary:
+			self.data_dict_path = os.path.join(basedir, transport_data_dictionary)
+			self.app_dict_path = os.path.join(basedir, app_data_dictionary)
+		else:
+			data_dictionary = config['DataDictionary'] if 'DataDictionary' in config else ''
+			self.data_dict_path = os.path.join(basedir, data_dictionary) if data_dictionary else ''
+			self.app_dict_path = None
+		always_on_top = config['AlwaysOnTop'] if 'AlwaysOnTop' in config else None
+		self.always_on_top = True if always_on_top and always_on_top == 'Yes' else False
+		expand_on_launch = config['ExpandOnLaunch'] if 'ExpandOnLaunch' in config else None
+		self.expand_on_launch = True if expand_on_launch and expand_on_launch == 'Yes' else False
+		error_on_statusbar = config['ErrorOnStatusbar'] if 'ErrorOnStatusbar' in config else None
+		self.error_on_statusbar = True if error_on_statusbar and error_on_statusbar == 'Yes' else False
+	
+	def build_msg_parser(self):
+		try:
+			if self.data_dict_path or self.app_dict_path:
+				return MessageParser(self.data_dict_path, self.app_dict_path)
+		except Exception as e:
+			print(e)
+			QMessageBox.warning(self, "Error",
+				f"""<p>Could not parse quickfix dictionary file at specified path. Please check the dictionary path in config file.</p>
+				<p>Application will now exit.</p>""",
+				QMessageBox.StandardButton.Ok)
+			sys.exit()
+
+		QMessageBox.warning(self, "Error",
+			f"""<p>Quickfix dictionary path incorrectly set. Please check the config file.</p>
+			<p>Application will now exit.</p>""",
+			QMessageBox.StandardButton.Ok)
+		sys.exit()
 
 	def init_ui(self):
 		self.setObjectName('MainWindow')
@@ -161,7 +164,6 @@ class AppWindow(QMainWindow):
 		compact_vbox.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 		expand_arrow = QLabel()
 		expand_arrow.setPixmap(QtGui.QPixmap(os.path.join(basedir, "assets", "DownArrow.png")))
-		# expand_arrow.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
 		viewer_container = QWidget()
 		viewer_vbox = QVBoxLayout()
@@ -197,11 +199,8 @@ class AppWindow(QMainWindow):
 		msg_delim_hbox.setContentsMargins(15, 0, 0, 0)
 		msg_delim_hbox.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 		msg_delim_label = QLabel('Delimiter:')
-		# print(msg_delim_label.sizePolicy().verticalPolicy())
 		msg_delim_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
-		# msg_delim_label.setContentsMargins(15, 5, 0, 0)
 		msg_delim_edit = QLineEdit('|')
-		# msg_delim_edit.setContentsMargins(0, 5, 0, 0)
 		msg_delim_edit.setTextMargins(5, 5, 5, 5)
 		msg_delim_edit.setMaxLength(1)
 		msg_delim_edit.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -213,7 +212,6 @@ class AppWindow(QMainWindow):
 		output_tree = QTreeWidget()
 		output_tree.setColumnCount(3)
 		output_tree.setHeaderLabels(['Tag', 'Name', 'Value'])
-
 
 		CENTRAL_VBOX = True
 		COMPACT_VBOX = True
@@ -276,7 +274,6 @@ class AppWindow(QMainWindow):
 		self.central_vbox = central_vbox
 		self.central_widget = central_widget
 		self.compact_container = compact_container
-		# self.compact_label = compact_label
 		self.viewer_container = viewer_container
 		self.compact_button = compact_button
 		self.autopaste_checkbox = autopaste_checkbox
@@ -304,21 +301,22 @@ class AppWindow(QMainWindow):
 		self.always_top_act.setShortcut('Ctrl+T')
 		self.always_top_act.setCheckable(True)
 		self.always_top_act.toggled.connect(self.toggle_stays_on_top)
-		if 'AlwaysOnTop' in self.config:
+		if self.always_on_top:
 			self.always_top_act.toggle()
 		self.show_err_msg_act = QtGui.QAction('&Show Message')
 		self.show_err_msg_act.setCheckable(True)
 		self.show_err_status_act = QtGui.QAction('&Show in Status Bar')
 		self.show_err_status_act.setCheckable(True)
-		self.no_show_err_act = QtGui.QAction('&Hide Error')
-		self.no_show_err_act.setCheckable(True)
 		self.err_act_grp = QtGui.QActionGroup(self)
 		self.err_act_grp.addAction(self.show_err_msg_act)
 		self.err_act_grp.addAction(self.show_err_status_act)
-		self.err_act_grp.addAction(self.no_show_err_act)
 		self.err_act_grp.triggered.connect(self.change_error_notification)
-		self.show_err_msg_act.setChecked(True)
-		self.change_error_notification(self.show_err_msg_act)
+		if self.error_on_statusbar:
+			self.show_err_status_act.setChecked(True)
+			self.change_error_notification(self.show_err_status_act)
+		else:
+			self.show_err_msg_act.setChecked(True)
+			self.change_error_notification(self.show_err_msg_act)
 
 	def setup_menu(self):
 		edit_menu = self.menuBar().addMenu('Edit')
@@ -329,7 +327,6 @@ class AppWindow(QMainWindow):
 		error_menu = view_menu.addMenu('Error')
 		error_menu.addAction(self.show_err_msg_act)
 		error_menu.addAction(self.show_err_status_act)
-		error_menu.addAction(self.no_show_err_act)
 
 	def init_logic(self):
 		self.is_compact = False
@@ -337,7 +334,6 @@ class AppWindow(QMainWindow):
 
 		self.message_editor.apply_signal.connect(self.apply_message_editor)
 		self.compact_container.mousePressEvent = lambda _: self.toggle_compact(False)
-		# self.compact_label.mousePressEvent = lambda _: self.toggle_compact(False)
 		self.compact_button.clicked.connect(lambda: self.toggle_compact(True))
 		self.autopaste_checkbox.toggled.connect(self.toggle_autopaste)
 		self.copy_button.clicked.connect(lambda: set_clipboard(self.clipboard, self.msg_line.toPlainText()))
@@ -356,18 +352,12 @@ class AppWindow(QMainWindow):
 		self.paste_decode_sc.activated.connect(self.paste_and_decode)
 		self.reparse_sc = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+R'), self)
 		self.reparse_sc.activated.connect(self.decode_and_show_msg)
-		# self.toggle_autopaste.activated.connect(lambda: print('toggle'))
 
 		self.setStatusBar(self.statusBar)
 
 	def toggle_compact(self, is_compact: bool):
 		if self.message_editor.isVisible():
 			return
-		# prev_inner_frame_x = self.geometry().topLeft().x()
-		# prev_pos = self.pos()
-		# frame_height = self.frameSize().height() - self.size().height()
-		# self.viewer_container.setVisible(not is_compact)
-		# self.compact_container.setVisible(is_compact)
 		if is_compact:
 			self.prev_size = self.size()
 			self.viewer_container.setVisible(False)
@@ -382,24 +372,8 @@ class AppWindow(QMainWindow):
 			self.menuBar().show()
 			self.statusBar.show()
 			self.central_vbox.setContentsMargins(10, 10, 10, 10)
-		# self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
-		# self.compact_label.adjustSize()
-		# self.compact_container.adjustSize()
-		# self.central_widget.adjustSize()
 		self.adjustSize()
-		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_label.minimumHeight()))
-		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), self.compact_line.minimumHeight()))
-		# self.resize(self.prev_size if not is_compact else QtCore.QSize(self.size().width(), 12))
 		self.resize(self.prev_size if not is_compact else (self.prev_compact_size if self.prev_compact_size else QtCore.QSize(self.size().width(), 12)))
-		# print(self.sizeHint())
-		# self.resize(self.prev_size if not is_compact else QtCore.QSize(0, 0))
-		# if is_compact:
-		# 	self.move(prev_inner_frame_x, prev_pos.y() - frame_height)
-		# else:
-		# 	self.resize(self.prev_size)
-		# 	self.move(prev_inner_frame_x, prev_pos.y())
-		# self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, is_compact)
-		# self.show()
 		self.is_compact = is_compact
 
 	def toggle_stays_on_top(self, checked):
@@ -435,21 +409,14 @@ class AppWindow(QMainWindow):
 					self.toggle_compact(True)
 		return super().changeEvent(e)
 
-	# def on_focus_changed(self):
-	# 	if not self.isActiveWindow() and not self.is_compact:
-	# 		self.toggle_compact(True)
-
 	def toggle_autocompact(self, checked: bool):
 		self.is_autocompact = checked
-		# if checked:
-		# 	self.app.focusChanged.connect(self.on_focus_changed)
-		# else:
-		# 	self.app.focusChanged.disconnect(self.on_focus_changed)
 
 	def show_message_editor(self, *arg):
 		if self.is_compact:
 			return
 		self.message_editor.msg_text_edit.setText(self.msg_line.toPlainText())
+		self.message_editor.move(self.pos())
 		self.message_editor.show()
 
 	def apply_message_editor(self):
@@ -457,30 +424,37 @@ class AppWindow(QMainWindow):
 		self.message_editor.close()
 		self.decode_and_show_msg()
 
+	def show_status_bar_msg(self, msg: str):
+		self.statusBar.clearMessage()
+		self.statusBar.showMessage(msg)
+		self.statusBar.setToolTip(msg)
+
 	def paste_and_decode(self):
 		self.msg_line.setText(get_clipboard(self.clipboard).replace('\n', '').replace('\r', ''))
 		self.decode_and_show_msg()
 
 	def decode_and_show_msg(self):
+		if not self.msg_line.toPlainText():
+			self.show_status_bar_msg('Nothing to parse')
+			return
 		try:
 			self.output_tree.clear()
-			self.statusBar.clearMessage()
 			msg_tree = self.msg_parser.parse_msg(self.msg_line.toPlainText(), self.msg_delim_edit.text() if self.msg_delim_edit.text() else '|')
 			self.build_output_tree(msg_tree)
-			self.statusBar.showMessage('Successfully parsed')
+			self.show_status_bar_msg('Successfully parsed')
 		except Exception as error:
 			error_msg = f'[{type(error).__name__}Error] {error}' 
 			if self.is_show_err_msg:
 				QMessageBox.warning(self, "Error", f"""<h2>Message Parsing Error</h2>
 					<p>{error_msg}</p>""", QMessageBox.StandardButton.Ok)
 			elif self.is_show_err_status:
-				self.statusBar.showMessage(error_msg)
+				self.show_status_bar_msg(error_msg)
 
 	def build_output_tree(self, msg_tree: ET.Element):
 		for section in msg_tree.iterfind('./'):
 			section_item = QTreeWidgetItem([section.tag])
 			self.output_tree.addTopLevelItem(section_item)
-			section_item.setExpanded(True if 'ExpandOnLaunch' in self.config else False)
+			section_item.setExpanded(self.expand_on_launch)
 			self.build_tree_item(section, section_item)
 		# Only resize the first and second column
 		for i in range(2):
@@ -489,7 +463,10 @@ class AppWindow(QMainWindow):
 	def build_tree_item(self, msg_elem: ET.Element, tree_parent: QTreeWidgetItem):
 		for elem in msg_elem.iterfind('./'):
 			field_tag = elem.get('number') if 'number' in elem.attrib else elem.tag
-			field_name = elem.get('name') if 'name' in elem.attrib else None
+			if elem.tag == 'field':
+				field_name = elem.get('name') if 'name' in elem.attrib else 'UNDEFINED'
+			else:
+				field_name = elem.get('name') if 'name' in elem.attrib else None
 			field_raw = elem.get('raw') if 'raw' in elem.attrib else None
 			field_enum = elem.get('enum') if 'enum' in elem.attrib else None
 			field_value = None
@@ -505,10 +482,14 @@ class AppWindow(QMainWindow):
 				if len(item_entries) < 2:
 					item_entries.append('')
 				item_entries.append(field_value)
+			if len(item_entries) > 3:
+				print(f'[WARNING] Row for {field_tag} contains more than 3 entries')
 			tree_item = QTreeWidgetItem(item_entries)
+			if len(item_entries) == 3:
+				tree_item.setToolTip(2, field_value)
 			tree_parent.addChild(tree_item)
 			self.build_tree_item(elem, tree_item)
-			tree_item.setExpanded(True if 'ExpandOnLaunch' in self.config else False)
+			tree_item.setExpanded(self.expand_on_launch)
 
 if __name__ == "__main__":
 
@@ -517,7 +498,7 @@ if __name__ == "__main__":
 	app.setWindowIcon(QtGui.QIcon(os.path.join(basedir, "assets", "appicon.ico")))
 	app_window = AppWindow(app)
 
-	msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|528=10|10=225|'
-	app_window.msg_line.setText(msg_string)
+	# msg_string = '8=FIX.4.4|9=224|35=D|34=1080|49=TESTBUY1|52=20180920-18:14:19.508|56=TESTSELL1|11=636730640278898634|15=USD|21=2|38=7000|40=1|54=1|55=MSFT|60=20180920-18:14:19.492|453=2|448=111|447=6|802=1|523=test1|448=222|447=8|802=2|523=test2|523=test3|528=10|94959=1234|10=225|'
+	# app_window.msg_line.setText(msg_string)
 
 	sys.exit(app.exec())

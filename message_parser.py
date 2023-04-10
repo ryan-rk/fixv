@@ -3,13 +3,12 @@ import re
 import xml.etree.ElementTree as ET
 
 class MessageParser():
-	def __init__(self, data_dict_path: str = None, appl_dict_path: str = None) -> None:
-		self.no_group_type = 'NUMINGROUP'
+	def __init__(self, data_dict_path: str = None, app_dict_path: str = None) -> None:
 		self.data_dictionary_path = data_dict_path
-		self.appl_dictionary_path = appl_dict_path
-		self.data_dictionary = qf.DataDictionary(data_dict_path)
-		self.appl_dictionary = qf.DataDictionary(appl_dict_path)
-		self.field_dictionary = self.appl_dictionary if self.appl_dictionary else self.data_dictionary
+		self.app_dictionary_path = app_dict_path
+		self.data_dictionary = qf.DataDictionary(data_dict_path) if data_dict_path else None
+		self.app_dictionary = qf.DataDictionary(app_dict_path) if app_dict_path else None
+		self.field_dictionary = self.app_dictionary if self.app_dictionary else self.data_dictionary
 
 	@staticmethod
 	def format_message(message: str, delim: str='|') -> str:
@@ -20,8 +19,11 @@ class MessageParser():
 		return re.sub(f'[{delim}]', '\x01', message)
 
 	def parse_msg(self, msg: str, delim: str = '|') -> ET.Element:
-		fix_msg = qf.Message(MessageParser.inv_format_message(msg, delim), self.data_dictionary, self.appl_dictionary, False)
-		fix_msg.InitializeXML(self.appl_dictionary_path if self.appl_dictionary_path else self.data_dictionary_path)
+		if self.app_dictionary:
+			fix_msg = qf.Message(MessageParser.inv_format_message(msg, delim), self.data_dictionary, self.app_dictionary, False)
+		else:
+			fix_msg = qf.Message(MessageParser.inv_format_message(msg, delim), self.data_dictionary, False)
+		fix_msg.InitializeXML(self.app_dictionary_path if self.app_dictionary_path else self.data_dictionary_path)
 		# print(fix_msg.toXML())
 		return ET.fromstring(fix_msg.toXML())
 
