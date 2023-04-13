@@ -90,6 +90,7 @@ class AppWindow(QMainWindow):
 		self.msg_parser = self.build_msg_parser()
 
 		self.app = app
+		self.message_editor = MessageEditor()
 		self.init_ui()
 		self.init_logic()
 		self.show()
@@ -126,7 +127,7 @@ class AppWindow(QMainWindow):
 		self.expand_on_launch = True if expand_on_launch and expand_on_launch == 'Yes' else False
 		error_on_statusbar = config['ErrorOnStatusbar'] if 'ErrorOnStatusbar' in config else None
 		self.error_on_statusbar = True if error_on_statusbar and error_on_statusbar == 'Yes' else False
-	
+
 	def build_msg_parser(self):
 		try:
 			if self.data_dict_path or self.app_dict_path:
@@ -285,7 +286,6 @@ class AppWindow(QMainWindow):
 		self.msg_line = msg_line
 		self.msg_delim_edit = msg_delim_edit
 		self.output_tree = output_tree
-		self.message_editor = MessageEditor()
 		self.clipboard = QGuiApplication.clipboard()
 		self.statusBar = QStatusBar()
 
@@ -378,6 +378,7 @@ class AppWindow(QMainWindow):
 
 	def toggle_stays_on_top(self, checked):
 		self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
+		self.message_editor.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
 		self.show()
 
 	def change_error_notification(self, qaction: QtGui.QAction):
@@ -443,7 +444,7 @@ class AppWindow(QMainWindow):
 			self.build_output_tree(msg_tree)
 			self.show_status_bar_msg('Successfully parsed')
 		except Exception as error:
-			error_msg = f'[{type(error).__name__}Error] {error}' 
+			error_msg = f'[{type(error).__name__}Error] {error}'
 			if self.is_show_err_msg:
 				QMessageBox.warning(self, "Error", f"""<h2>Message Parsing Error</h2>
 					<p>{error_msg}</p>""", QMessageBox.StandardButton.Ok)
