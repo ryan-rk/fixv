@@ -128,6 +128,11 @@ class AppWindow(QMainWindow):
 		error_on_statusbar = config['ErrorOnStatusbar'] if 'ErrorOnStatusbar' in config else None
 		self.error_on_statusbar = True if error_on_statusbar and error_on_statusbar == 'Yes' else False
 
+		# Set other initial configs for the app
+		self.is_compact = False
+		self.is_autocompact = False
+
+
 	def build_msg_parser(self):
 		try:
 			if self.data_dict_path or self.app_dict_path:
@@ -329,9 +334,6 @@ class AppWindow(QMainWindow):
 		error_menu.addAction(self.show_err_status_act)
 
 	def init_logic(self):
-		self.is_compact = False
-		self.is_autocompact = False
-
 		self.message_editor.apply_signal.connect(self.apply_message_editor)
 		self.compact_container.mousePressEvent = lambda _: self.toggle_compact(False)
 		self.compact_button.clicked.connect(lambda: self.toggle_compact(True))
@@ -403,7 +405,7 @@ class AppWindow(QMainWindow):
 	def changeEvent(self, e: QtCore.QEvent) -> None:
 		if e.type() == QtCore.QEvent.Type.ActivationChange:
 			if self.isActiveWindow():
-				if self.is_compact:
+				if self.is_autocompact and self.is_compact:
 					self.toggle_compact(False)
 			else:
 				if self.is_autocompact and not self.is_compact:
