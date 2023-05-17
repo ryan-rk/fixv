@@ -3,7 +3,7 @@ import os
 import configparser
 import xml.etree.ElementTree as ET
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame, QStatusBar
+from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, QSizePolicy, QDialog, QScrollArea, QCheckBox, QMessageBox, QFrame, QStatusBar, QApplication
 from PyQt6.QtGui import QGuiApplication, QClipboard
 from message_parser import MessageParser
 from typing import Tuple
@@ -121,12 +121,36 @@ class AppWindow(QMainWindow):
 			data_dictionary = config['DataDictionary'] if 'DataDictionary' in config else ''
 			self.data_dict_path = os.path.join(basedir, data_dictionary) if data_dictionary else ''
 			self.app_dict_path = None
-		always_on_top = config['AlwaysOnTop'] if 'AlwaysOnTop' in config else None
-		self.always_on_top = True if always_on_top and always_on_top == 'Yes' else False
-		expand_on_launch = config['ExpandOnLaunch'] if 'ExpandOnLaunch' in config else None
-		self.expand_on_launch = True if expand_on_launch and expand_on_launch == 'Yes' else False
-		error_on_statusbar = config['ErrorOnStatusbar'] if 'ErrorOnStatusbar' in config else None
-		self.error_on_statusbar = True if error_on_statusbar and error_on_statusbar == 'Yes' else False
+		# Setting config with default values
+		self.always_on_top = False
+		self.expand_tree_on_launch = False
+		self.error_on_statusbar = False
+		self.is_right_align = False
+		self.start_pos = (0, 0)
+		self.start_size = (500, 600)
+		try:
+			if 'AlwaysOnTop' in config:
+				self.always_on_top = config.getboolean('AlwaysOnTop')
+			if 'ExpandOnLaunch' in config:
+				self.expand_tree_on_launch = config.getboolean('ExpandOnLaunch')
+			if 'ErrorOnStatusbar' in config:
+				self.error_on_statusbar = config.getboolean('ErrorOnStatusbar')
+			if 'IsRightAlign' in config:
+				self.is_right_align = config.getboolean('IsRightAlign')
+			start_pos_x = config.getint('StartPosX') if 'StartPosX' in config else self.start_pos[0]
+			start_pos_y = config.getint('StartPosY') if 'StartPosY' in config else self.start_pos[1]
+			self.start_pos = (start_pos_x, start_pos_y)
+			start_width = config.getint('StartWidth') if 'StartWidth' in config else self.start_size[0]
+			start_height = config.getint('StartHeight') if 'StartHeight' in config else self.start_size[1]
+			self.start_size = (start_width, start_height)
+		except ValueError:
+			print("Encountered value error in setting config")
+		# always_on_top = config['AlwaysOnTop'] if 'AlwaysOnTop' in config else None
+		# self.always_on_top = True if always_on_top and always_on_top == 'Yes' else False
+		# expand_on_launch = config['ExpandOnLaunch'] if 'ExpandOnLaunch' in config else None
+		# self.expand_on_launch = True if expand_on_launch and expand_on_launch == 'Yes' else False
+		# error_on_statusbar = config['ErrorOnStatusbar'] if 'ErrorOnStatusbar' in config else None
+		# self.error_on_statusbar = True if error_on_statusbar and error_on_statusbar == 'Yes' else False
 
 		# Set other initial configs for the app
 		self.is_compact = False
@@ -154,8 +178,9 @@ class AppWindow(QMainWindow):
 	def init_ui(self):
 		self.setObjectName('MainWindow')
 		self.setWindowTitle('FIXV')
-		self.resize(500, 600)
-		self.move(0, 0)
+		self.resize(self.start_size[0], self.start_size[1])
+		windowPosX = QApplication.primaryScreen().size().width() - self.start_size[0] - self.start_pos[0] if self.is_right_align else self.start_pos[0]
+		self.move(windowPosX, self.start_pos[1])
 		self.setup_actions()
 		self.setup_menu()
 
@@ -360,6 +385,7 @@ class AppWindow(QMainWindow):
 	def toggle_compact(self, is_compact: bool):
 		if self.message_editor.isVisible():
 			return
+		right_edge_x = self.pos().x() + self.size().width()
 		if is_compact:
 			self.prev_size = self.size()
 			self.viewer_container.setVisible(False)
@@ -377,6 +403,8 @@ class AppWindow(QMainWindow):
 		self.adjustSize()
 		self.resize(self.prev_size if not is_compact else (self.prev_compact_size if self.prev_compact_size else QtCore.QSize(self.size().width(), 12)))
 		self.is_compact = is_compact
+		if self.is_right_align:
+			self.move(right_edge_x - self.size().width(), self.pos().y())
 
 	def toggle_stays_on_top(self, checked):
 		self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, checked)
@@ -457,7 +485,7 @@ class AppWindow(QMainWindow):
 		for section in msg_tree.iterfind('./'):
 			section_item = QTreeWidgetItem([section.tag])
 			self.output_tree.addTopLevelItem(section_item)
-			section_item.setExpanded(self.expand_on_launch)
+			section_item.setExpanded(self.expand_tree_on_launch)
 			self.build_tree_item(section, section_item)
 		# Only resize the first and second column
 		for i in range(2):
@@ -492,7 +520,7 @@ class AppWindow(QMainWindow):
 				tree_item.setToolTip(2, field_value)
 			tree_parent.addChild(tree_item)
 			self.build_tree_item(elem, tree_item)
-			tree_item.setExpanded(self.expand_on_launch)
+			tree_item.setExpanded(self.expand_tree_on_launch)
 
 if __name__ == "__main__":
 
